@@ -256,4 +256,9 @@ class CSVImporter:
         except Exception as e:
             raise Exception(f"Import failed: {str(e)}")
         
+        # Save transactions to database if db provided
+        if db and transactions:
+            for transaction in transactions:
+                db.insert_transaction(transaction)
+        
         return transactions, warnings

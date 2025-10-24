@@ -8,46 +8,230 @@ from src.database import Database, Transaction
 class Categorizer:
     """Manages transaction categorization"""
     
-    DEFAULT_CATEGORIES = [
-        "Alimentation",
-        "Transport",
-        "Logement",
-        "Utilities",
-        "Loisirs",
-        "Santé",
-        "Éducation",
-        "Autres"
-    ]
+    # Parent categories for expenses
+    DEFAULT_CATEGORIES_EXPENSES = {
+        "Logement": [
+            "Loyer/Hypothèque",
+            "Charges",
+            "Électricité/Gaz/Eau",
+            "Internet/Téléphone",
+            "Entretien/Réparations"
+        ],
+        "Alimentation": [
+            "Courses",
+            "Restaurants",
+            "Café/Snacks",
+            "Livraison de repas"
+        ],
+        "Transport": [
+            "Carburant",
+            "Transports en commun",
+            "Parking",
+            "Entretien voiture",
+            "Péages",
+            "Taxi/VTC"
+        ],
+        "Santé": [
+            "Médecin/Dentiste",
+            "Pharmacie",
+            "Lunettes/Lentilles",
+            "Sport/Fitness"
+        ],
+        "Loisirs": [
+            "Cinéma/Théâtre",
+            "Livres/Musique",
+            "Jeux vidéo",
+            "Hobbies",
+            "Abonnements (streaming, etc.)"
+        ],
+        "Vêtements et accessoires": [
+            "Vêtements",
+            "Chaussures",
+            "Bijoux",
+            "Sacs"
+        ],
+        "Éducation": [
+            "Cours",
+            "Formation",
+            "Livres scolaires",
+            "Frais d'inscription"
+        ],
+        "Enfants": [
+            "Garde d'enfants",
+            "École",
+            "Activités",
+            "Jouets"
+        ],
+        "Animaux": [
+            "Nourriture",
+            "Vétérinaire",
+            "Accessoires"
+        ],
+        "Beauté et bien-être": [
+            "Coiffeur",
+            "Cosmétiques",
+            "Massage",
+            "Soins"
+        ],
+        "Services et abonnements": [
+            "Services numériques",
+            "Adhésions"
+        ],
+        "Assurances": [
+            "Assurance auto",
+            "Assurance habitation",
+            "Assurance santé",
+            "Assurance vie",
+            "Assurance prêt",
+            "Assurance responsabilité civile",
+            "Autres assurances"
+        ],
+        "Impôts et cotisations": [
+            "Impôts",
+            "Cotisations sociales"
+        ],
+        "Cadeaux et dons": [
+            "Cadeaux",
+            "Charité",
+            "Donations"
+        ],
+        "Dépenses exceptionnelles": [
+            "Voyages",
+            "Gros achats",
+            "Réparations importantes"
+        ]
+    }
+    
+    # Parent categories for income
+    DEFAULT_CATEGORIES_INCOME = {
+        "Salaire": [
+            "Salaire principal",
+            "Primes",
+            "Bonus",
+            "Commissions"
+        ],
+        "Revenus professionnels": [
+            "Freelance",
+            "Activité indépendante",
+            "Honoraires"
+        ],
+        "Placements": [
+            "Intérêts",
+            "Dividendes",
+            "Plus-values"
+        ],
+        "Aides sociales": [
+            "Allocations familiales",
+            "Allocation chômage",
+            "Revenu minimum",
+            "RSA",
+            "Aides au logement",
+            "Autres aides"
+        ],
+        "Autres revenus": [
+            "Remboursements",
+            "Ventes d'objets",
+            "Location"
+        ],
+        "Revenus exceptionnels": [
+            "Héritage",
+            "Bonus exceptionnel"
+        ]
+    }
     
     # Keyword rules for auto-categorization
     AUTO_RULES = {
-        "Alimentation": ["lidl", "carrefour", "intermarche", "restaurant", "mc donald", "pizza"],
-        "Transport": ["essence", "parking", "sncf", "bus", "metro", "uber", "taxi"],
-        "Logement": ["loyer", "immobilier", "proprio"],
-        "Utilities": ["edf", "orange", "water", "eau", "electricite", "gaz", "internet"],
-        "Loisirs": ["cinema", "theatre", "spotify", "netflix", "jeux", "flickr"],
-        "Santé": ["pharmacie", "docteur", "medical", "sante"],
+        "Alimentation": ["lidl", "carrefour", "intermarche", "restaurant", "mc donald", "pizza", "boulangerie", "boucherie"],
+        "Transport": ["essence", "parking", "sncf", "bus", "metro", "uber", "taxi", "autolib", "carburant"],
+        "Logement": ["loyer", "immobilier", "proprio", "syndic"],
+        "Internet/Téléphone": ["edf", "orange", "water", "eau", "electricite", "gaz", "internet", "téléphone", "sfr", "bouygues"],
+        "Loisirs": ["cinema", "theatre", "spotify", "netflix", "jeux", "flickr", "steam", "playstation"],
+        "Santé": ["pharmacie", "docteur", "medical", "sante", "dentiste"],
         "Éducation": ["ecole", "universite", "formation", "cours"],
     }
+    
+    DEFAULT_CATEGORIES = list(DEFAULT_CATEGORIES_EXPENSES.keys()) + list(DEFAULT_CATEGORIES_INCOME.keys())
     
     def __init__(self, db: Database = None):
         """Initialize categorizer"""
         self.db = db
     
     def init_categories(self):
-        """Initialize default categories in database"""
+        """Initialize default categories and subcategories in database"""
         if not self.db:
             return
         
-        for category in self.DEFAULT_CATEGORIES:
+        # Initialize expense categories with subcategories
+        for parent_category, subcategories in self.DEFAULT_CATEGORIES_EXPENSES.items():
             try:
                 self.db.cursor.execute(
                     "INSERT INTO categories (name) VALUES (?)",
-                    (category,)
+                    (parent_category,)
                 )
+                parent_id = self.db.cursor.lastrowid
+                
+                # Add subcategories
+                for subcategory in subcategories:
+                    try:
+                        self.db.cursor.execute(
+                            "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                            (subcategory, parent_id)
+                        )
+                    except:
+                        pass
             except:
-                # Category already exists
-                pass
+                # Category already exists, try to add subcategories
+                self.db.cursor.execute(
+                    "SELECT id FROM categories WHERE name = ? AND parent_id IS NULL",
+                    (parent_category,)
+                )
+                result = self.db.cursor.fetchone()
+                if result:
+                    parent_id = result[0]
+                    for subcategory in subcategories:
+                        try:
+                            self.db.cursor.execute(
+                                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                                (subcategory, parent_id)
+                            )
+                        except:
+                            pass
+        
+        # Initialize income categories with subcategories
+        for parent_category, subcategories in self.DEFAULT_CATEGORIES_INCOME.items():
+            try:
+                self.db.cursor.execute(
+                    "INSERT INTO categories (name) VALUES (?)",
+                    (parent_category,)
+                )
+                parent_id = self.db.cursor.lastrowid
+                
+                # Add subcategories
+                for subcategory in subcategories:
+                    try:
+                        self.db.cursor.execute(
+                            "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                            (subcategory, parent_id)
+                        )
+                    except:
+                        pass
+            except:
+                # Category already exists, try to add subcategories
+                self.db.cursor.execute(
+                    "SELECT id FROM categories WHERE name = ? AND parent_id IS NULL",
+                    (parent_category,)
+                )
+                result = self.db.cursor.fetchone()
+                if result:
+                    parent_id = result[0]
+                    for subcategory in subcategories:
+                        try:
+                            self.db.cursor.execute(
+                                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                                (subcategory, parent_id)
+                            )
+                        except:
+                            pass
         
         self.db.connection.commit()
     
