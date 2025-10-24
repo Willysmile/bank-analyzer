@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bank-analyzer"
+version = "0.1.0"
+description = "Outil d'analyse personnelle des relevés bancaires"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Utilisateur", email = "user@example.com"}
+]
+keywords = ["bank", "csv", "analysis", "categorization"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+    "pandas>=1.5.0,<3.0",
+    "pytest>=7.0.0,<8.0",
+    "click>=8.1.0,<9.0",
+    "tabulate>=0.9.0,<1.0",
+    "pyyaml>=6.0,<7.0",
+    "python-dateutil>=2.8.0,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov>=4.0.0,<5.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "mypy>=0.990",
+]
+
+[project.urls]
+Homepage = "https://github.com/username/bank-analyzer"
+Repository = "https://github.com/username/bank-analyzer.git"
+Issues = "https://github.com/username/bank-analyzer/issues"
+
+[tool.setuptools]
+packages = ["src"]

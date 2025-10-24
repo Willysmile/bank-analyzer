@@ -1,0 +1,8 @@
+# Bank Analyzer Data Directory
+
+This directory contains the SQLite database and imported CSV files.
+
+## Files
+
+- `database.db` - SQLite database (generated automatically)
+- `imports/` - Backup of imported CSV files
