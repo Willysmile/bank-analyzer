@@ -232,7 +232,7 @@ class BankAnalyzerGUI:
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="Catégorisation Automatique", font=("Arial", 14, "bold"))
+        title = ttk.Label(frame, text="Catégorisation Manuelle", font=("Arial", 14, "bold"))
         title.pack(pady=10)
         
         # Info frame
@@ -240,51 +240,156 @@ class BankAnalyzerGUI:
         info_frame.pack(fill=tk.X, pady=10)
         
         self.uncategorized_label = ttk.Label(info_frame, text="Chargement...", font=("Arial", 12))
-        self.uncategorized_label.pack(pady=10)
+        self.uncategorized_label.pack(pady=5)
         
-        # Action frame
-        action_frame = ttk.LabelFrame(frame, text="Actions", padding=10)
-        action_frame.pack(fill=tk.X, pady=10)
+        # Main content frame with two columns
+        content_frame = ttk.Frame(frame)
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        content_frame.columnconfigure(0, weight=1)
+        content_frame.columnconfigure(1, weight=1)
         
-        auto_btn = ttk.Button(action_frame, text="🤖 Catégoriser Automatiquement", command=self.auto_categorize)
-        auto_btn.pack(side=tk.LEFT, padx=5)
+        # Left column: Transaction details
+        left_frame = ttk.LabelFrame(content_frame, text="Transaction", padding=10)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=5)
+        left_frame.columnconfigure(0, weight=1)
+        left_frame.rowconfigure(2, weight=1)
         
-        refresh_btn = ttk.Button(action_frame, text="🔄 Actualiser", command=self.update_uncategorized_count)
-        refresh_btn.pack(side=tk.LEFT, padx=5)
+        # Date
+        ttk.Label(left_frame, text="Date:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w")
+        self.cat_date_label = ttk.Label(left_frame, text="-", foreground="blue")
+        self.cat_date_label.grid(row=0, column=0, sticky="e", padx=20)
         
-        # Rules frame
-        rules_frame = ttk.LabelFrame(frame, text="Règles de Catégorisation", padding=10)
-        rules_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        # Montant
+        ttk.Label(left_frame, text="Montant:", font=("Arial", 10, "bold")).grid(row=1, column=0, sticky="w", pady=5)
+        self.cat_amount_label = ttk.Label(left_frame, text="-", foreground="blue")
+        self.cat_amount_label.grid(row=1, column=0, sticky="e", padx=20)
         
-        # Rules text
-        info_text = tk.Text(rules_frame, height=15)
-        info_text.pack(fill=tk.BOTH, expand=True)
-        info_text.insert(tk.END, self.get_rules_text())
-        info_text.config(state=tk.DISABLED)
+        # Libellé
+        ttk.Label(left_frame, text="Libellé:", font=("Arial", 10, "bold")).grid(row=2, column=0, sticky="nw", pady=5)
         
-        self.update_uncategorized_count()
+        # Text area for description (read-only)
+        scrollbar = ttk.Scrollbar(left_frame)
+        scrollbar.grid(row=2, column=1, sticky="ns")
+        
+        self.cat_description = tk.Text(left_frame, height=10, yscrollcommand=scrollbar.set, wrap=tk.WORD)
+        self.cat_description.grid(row=2, column=0, sticky="nsew", pady=5)
+        scrollbar.config(command=self.cat_description.yview)
+        self.cat_description.config(state=tk.DISABLED)
+        
+        # Right column: Categorization
+        right_frame = ttk.LabelFrame(content_frame, text="Catégorisation", padding=10)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=5)
+        right_frame.columnconfigure(0, weight=1)
+        
+        ttk.Label(right_frame, text="Sélectionne une catégorie:", font=("Arial", 10)).pack(anchor="w")
+        
+        self.category_var = tk.StringVar()
+        categories = self.categorizer.get_categories()
+        
+        # Category buttons
+        button_frame = ttk.Frame(right_frame)
+        button_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.category_buttons = {}
+        for i, category in enumerate(categories):
+            btn = ttk.Button(
+                button_frame,
+                text=category,
+                command=lambda cat=category: self.assign_category(cat)
+            )
+            btn.pack(fill=tk.X, pady=5)
+            self.category_buttons[category] = btn
+        
+        # Navigation frame
+        nav_frame = ttk.Frame(frame)
+        nav_frame.pack(fill=tk.X, pady=10)
+        
+        prev_btn = ttk.Button(nav_frame, text="⬅️ Précédent", command=self.prev_transaction)
+        prev_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.transaction_counter = ttk.Label(nav_frame, text="0/0", font=("Arial", 10))
+        self.transaction_counter.pack(side=tk.LEFT, padx=20)
+        
+        next_btn = ttk.Button(nav_frame, text="Suivant ➡️", command=self.next_transaction)
+        next_btn.pack(side=tk.LEFT, padx=5)
+        
+        refresh_btn = ttk.Button(nav_frame, text="🔄 Actualiser", command=self.refresh_categorization)
+        refresh_btn.pack(side=tk.RIGHT, padx=5)
+        
+        # Current transaction tracking
+        self.uncategorized_transactions = []
+        self.current_transaction_idx = 0
+        
+        self.refresh_categorization()
     
-    def get_rules_text(self):
-        """Get formatted rules text"""
-        text = "Règles de catégorisation automatiques:\n\n"
-        for category, keywords in self.categorizer.AUTO_RULES.items():
-            text += f"🏷️ {category}:\n"
-            text += f"   Mots-clés: {', '.join(keywords)}\n\n"
-        return text
+    def refresh_categorization(self):
+        """Refresh uncategorized transactions list"""
+        self.uncategorized_transactions = self.categorizer.get_uncategorized()
+        self.current_transaction_idx = 0
+        self.update_uncategorized_count()
+        self.display_transaction()
+    
+    def display_transaction(self):
+        """Display current transaction"""
+        if not self.uncategorized_transactions:
+            self.cat_date_label.config(text="Aucune transaction")
+            self.cat_amount_label.config(text="-")
+            self.cat_description.config(state=tk.NORMAL)
+            self.cat_description.delete(1.0, tk.END)
+            self.cat_description.insert(tk.END, "Aucune transaction non catégorisée!")
+            self.cat_description.config(state=tk.DISABLED)
+            self.transaction_counter.config(text="0/0")
+            return
+        
+        t = self.uncategorized_transactions[self.current_transaction_idx]
+        
+        # Update display
+        self.cat_date_label.config(text=t.date)
+        amount_color = "green" if t.amount > 0 else "red"
+        self.cat_amount_label.config(text=f"€{t.amount:.2f}", foreground=amount_color)
+        
+        self.cat_description.config(state=tk.NORMAL)
+        self.cat_description.delete(1.0, tk.END)
+        self.cat_description.insert(tk.END, t.description)
+        self.cat_description.config(state=tk.DISABLED)
+        
+        # Update counter
+        total = len(self.uncategorized_transactions)
+        self.transaction_counter.config(text=f"{self.current_transaction_idx + 1}/{total}")
+    
+    def assign_category(self, category):
+        """Assign category to current transaction and move to next"""
+        if not self.uncategorized_transactions:
+            return
+        
+        t = self.uncategorized_transactions[self.current_transaction_idx]
+        
+        if self.categorizer.categorize_transaction(t.id, category):
+            self.next_transaction()
+    
+    def next_transaction(self):
+        """Move to next transaction"""
+        if self.current_transaction_idx < len(self.uncategorized_transactions) - 1:
+            self.current_transaction_idx += 1
+            self.display_transaction()
+        else:
+            messagebox.showinfo("Fin", "Toutes les transactions visibles ont été catégorisées!")
+            self.refresh_categorization()
+    
+    def prev_transaction(self):
+        """Move to previous transaction"""
+        if self.current_transaction_idx > 0:
+            self.current_transaction_idx -= 1
+            self.display_transaction()
+        else:
+            messagebox.showinfo("Début", "Vous êtes déjà à la première transaction")
     
     def update_uncategorized_count(self):
         """Update uncategorized transactions count"""
-        uncategorized = len(self.categorizer.get_uncategorized())
+        total = len(self.uncategorized_transactions)
         self.uncategorized_label.config(
-            text=f"📊 {uncategorized} transactions non catégorisées"
+            text=f"📊 {total} transaction(s) non catégorisée(s)"
         )
-    
-    def auto_categorize(self):
-        """Auto-categorize all uncategorized transactions"""
-        count = self.categorizer.categorize_all_auto()
-        messagebox.showinfo("Succès", f"{count} transactions catégorisées!")
-        self.update_uncategorized_count()
-        self.refresh_transactions()
     
     def setup_report_tab(self):
         """Setup the report tab"""
