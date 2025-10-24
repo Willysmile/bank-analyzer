@@ -523,3 +523,10 @@ class Categorizer:
             return result[0] if result else None
         except:
             return None
+    
+    def remove_duplicate_transactions(self) -> int:
+        """Remove duplicate transactions from the database"""
+        if not self.db:
+            return 0
+        
+        return self.db.remove_duplicates()

@@ -178,12 +178,15 @@ class CSVImporter:
         
         Returns:
             Tuple of (transactions list, warnings list)
+            Transactions are saved to database if db is provided
+            Duplicates are automatically skipped
         """
         if not Path(filepath).exists():
             raise FileNotFoundError(f"File not found: {filepath}")
         
         warnings = []
         transactions = []
+        duplicates_skipped = 0
         
         try:
             rows = self._parse_csv(filepath)
@@ -244,7 +247,7 @@ class CSVImporter:
                     # Check for duplicates if db provided
                     if db:
                         if db.get_duplicate_check(date, description, amount):
-                            warnings.append(f"Row {idx}: Duplicate transaction, skipping")
+                            duplicates_skipped += 1
                             continue
                     
                     transactions.append(transaction)
@@ -255,6 +258,10 @@ class CSVImporter:
         
         except Exception as e:
             raise Exception(f"Import failed: {str(e)}")
+        
+        # Add summary of duplicates skipped
+        if duplicates_skipped > 0:
+            warnings.append(f"⚠️ {duplicates_skipped} transaction(s) dupliquée(s) ignorée(s)")
         
         # Save transactions to database if db provided
         if db and transactions:

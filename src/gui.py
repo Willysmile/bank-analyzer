@@ -812,7 +812,8 @@ class BankAnalyzerGUI:
         
         ttk.Button(btn_frame, text="📊 Statistiques BD", command=self.show_db_stats).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="💾 Exporter", command=self.export_db).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="🗑️ Vider", command=self.clear_db).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="� Supprimer doublons", command=self.remove_duplicates).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="�🗑️ Vider", command=self.clear_db).pack(side=tk.LEFT, padx=5)
         
         # Info section
         info_frame = ttk.LabelFrame(frame, text="Informations", padding=15)
@@ -898,6 +899,21 @@ Règles: {len(self.categorizer.get_rules())}
                 messagebox.showinfo("Succès", "Base de données vidée!\n(Les catégories ont été conservées)")
             except Exception as e:
                 messagebox.showerror("Erreur", f"Erreur lors du vidage: {str(e)}")
+    
+    def remove_duplicates(self):
+        """Remove duplicate transactions"""
+        if messagebox.askyesno("Attention!", "Supprimer les transactions dupliquées?\n\nCela gardera la première occurrence et supprimera les doublons."):
+            try:
+                deleted = self.categorizer.remove_duplicate_transactions()
+                
+                # Refresh all views
+                self.refresh_transactions()
+                self.refresh_categorize_tab()
+                self.generate_report()
+                
+                messagebox.showinfo("Succès", f"✅ {deleted} transaction(s) dupliquée(s) supprimée(s)!")
+            except Exception as e:
+                messagebox.showerror("Erreur", f"Erreur lors de la suppression des doublons: {str(e)}")
 
 
 def main():

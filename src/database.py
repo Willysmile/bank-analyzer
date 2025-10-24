@@ -179,6 +179,20 @@ class Database:
         result = self.cursor.fetchone()
         return result[0] if result else None
     
+    def remove_duplicates(self) -> int:
+        """Remove duplicate transactions, keeping the first occurrence"""
+        self.cursor.execute("""
+            DELETE FROM transactions
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM transactions
+                GROUP BY date, description, amount
+            )
+        """)
+        
+        deleted_count = self.cursor.rowcount
+        self.connection.commit()
+        return deleted_count
+    
     def close(self):
         """Close database connection"""
         if self.connection:
