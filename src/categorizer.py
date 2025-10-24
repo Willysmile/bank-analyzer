@@ -234,16 +234,23 @@ class Categorizer:
                         (parent_category,)
                     )
                     parent_id = self.db.cursor.lastrowid
-                    
-                    # Add subcategories
-                    for subcategory in subcategories:
-                        try:
+                else:
+                    parent_id = result[0]
+                
+                # Ensure all default subcategories exist
+                for subcategory in subcategories:
+                    try:
+                        self.db.cursor.execute(
+                            "SELECT id FROM categories WHERE name = ? AND parent_id = ?",
+                            (subcategory, parent_id)
+                        )
+                        if not self.db.cursor.fetchone():
                             self.db.cursor.execute(
                                 "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
                                 (subcategory, parent_id)
                             )
-                        except:
-                            pass
+                    except:
+                        pass
             except:
                 pass
         
@@ -263,16 +270,23 @@ class Categorizer:
                         (parent_category,)
                     )
                     parent_id = self.db.cursor.lastrowid
-                    
-                    # Add subcategories
-                    for subcategory in subcategories:
-                        try:
+                else:
+                    parent_id = result[0]
+                
+                # Ensure all default subcategories exist
+                for subcategory in subcategories:
+                    try:
+                        self.db.cursor.execute(
+                            "SELECT id FROM categories WHERE name = ? AND parent_id = ?",
+                            (subcategory, parent_id)
+                        )
+                        if not self.db.cursor.fetchone():
                             self.db.cursor.execute(
                                 "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
                                 (subcategory, parent_id)
                             )
-                        except:
-                            pass
+                    except:
+                        pass
             except:
                 pass
         
