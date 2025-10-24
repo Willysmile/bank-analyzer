@@ -32,7 +32,7 @@ Le projet vise à créer un outil d'analyse personnelle des dépenses bancaires,
   - `Débit euros` : Montants débités
   - `Crédit euros` : Montants crédités
   - Gestion des en-têtes multiples (en-têtes personnalisés en haut du fichier)
-  - Encodage : ISO-8859-1
+  - Encodage : UTF-8 (auto-détecté)
   - Séparateur : virgule
 - **Traitement** :
   - Détection et suppression des lignes d'en-tête et de métadonnées

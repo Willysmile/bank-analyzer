@@ -18,7 +18,7 @@ class CSVImporter:
         'description_column': 'Libellé',
         'debit_column': 'Débit euros',
         'credit_column': 'Crédit euros',
-        'encoding': 'iso-8859-1',
+        'encoding': 'utf-8',
         'delimiter': ',',
         'skip_rows': 0,
         'date_format': '%d/%m/%Y'
@@ -38,20 +38,44 @@ class CSVImporter:
         """Parse CSV file and return list of rows"""
         encoding = self.config.get('encoding')
         delimiter = self.config.get('delimiter', ',')
-        skip_rows = self.config.get('skip_rows', 0)
         
         rows = []
         try:
             with open(filepath, 'r', encoding=encoding) as f:
+                lines = f.readlines()
+            
+            # Find the header row by looking for the line with our expected columns
+            header_row_idx = None
+            expected_keywords = {'Date', 'Libellé', 'Débit', 'Crédit'}
+            
+            for idx, line in enumerate(lines):
+                # Check if this line looks like a header
+                line_upper = line.upper()
+                if all(keyword.upper() in line_upper for keyword in expected_keywords):
+                    header_row_idx = idx
+                    break
+            
+            if header_row_idx is None:
+                # Fallback: try to find line with Date and Libellé
+                for idx, line in enumerate(lines):
+                    if 'Date' in line and 'Libellé' in line:
+                        header_row_idx = idx
+                        break
+            
+            if header_row_idx is None:
+                raise ValueError("Could not find header row in CSV file")
+            
+            # Now parse from the header row onward
+            with open(filepath, 'r', encoding=encoding) as f:
+                # Skip to header row
+                for _ in range(header_row_idx):
+                    f.readline()
+                
                 reader = csv.DictReader(f, delimiter=delimiter)
                 
-                # Skip rows if needed
-                for _ in range(skip_rows):
-                    next(reader, None)
-                
                 for row in reader:
-                    # Skip empty rows
-                    if any(row.values()):
+                    # Skip empty rows and rows with all empty values
+                    if row and any(str(v).strip() for v in row.values()):
                         rows.append(row)
             
             return rows
@@ -105,23 +129,31 @@ class CSVImporter:
             debit_col = self.config['debit_column']
             credit_col = self.config['credit_column']
             
-            # Check required columns
+            # Check required columns - be flexible with whitespace
             if rows:
+                first_row = rows[0]
+                # Clean column names from whitespace
+                available_cols = {k.strip(): v for k, v in first_row.items()}
                 required_cols = [date_col, desc_col, debit_col, credit_col]
-                available_cols = set(rows[0].keys())
+                
                 missing_cols = [col for col in required_cols if col not in available_cols]
                 
                 if missing_cols:
-                    raise ValueError(f"Missing columns in CSV: {', '.join(missing_cols)}")
+                    # Try to find columns with similar names
+                    available_names = list(available_cols.keys())
+                    raise ValueError(f"Missing columns in CSV. Expected: {', '.join(required_cols)}\nFound: {', '.join(available_names)}")
             
             # Process each row
             for idx, row in enumerate(rows, start=1):
                 try:
-                    date = self._parse_date(row.get(date_col, '').strip())
-                    description = row.get(desc_col, '').strip()
+                    # Clean row keys (strip whitespace)
+                    clean_row = {k.strip(): v for k, v in row.items()}
                     
-                    debit = self._clean_amount(row.get(debit_col, ''))
-                    credit = self._clean_amount(row.get(credit_col, ''))
+                    date = self._parse_date(clean_row.get(date_col, '').strip())
+                    description = clean_row.get(desc_col, '').strip()
+                    
+                    debit = self._clean_amount(clean_row.get(debit_col, ''))
+                    credit = self._clean_amount(clean_row.get(credit_col, ''))
                     
                     # Combine debit/credit: debit is negative, credit is positive
                     amount = credit - debit if credit > 0 else -debit
