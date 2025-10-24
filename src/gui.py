@@ -875,7 +875,7 @@ Règles: {len(self.categorizer.get_rules())}
     
     def clear_db(self):
         """Clear database"""
-        if messagebox.askyesno("Attention!", "Vider complètement la base de données?\n\nCette action est irréversible!"):
+        if messagebox.askyesno("Attention!", "Vider complètement la base de données?\n\nCette action est irréversible!\n(Les catégories personnalisées seront conservées)"):
             try:
                 # Delete all transactions
                 self.db.cursor.execute("DELETE FROM transactions")
@@ -885,12 +885,8 @@ Règles: {len(self.categorizer.get_rules())}
                 self.db.cursor.execute("DELETE FROM categorization_rules")
                 self.db.connection.commit()
                 
-                # Delete all categories (including subcategories)
-                self.db.cursor.execute("DELETE FROM categories")
-                self.db.connection.commit()
-                
-                # Reinitialize default categories
-                self.categorizer.init_categories()
+                # Ensure default categories exist (without deleting custom ones)
+                self.categorizer.ensure_default_categories()
                 
                 # Refresh all views
                 self.refresh_transactions()
@@ -899,7 +895,7 @@ Règles: {len(self.categorizer.get_rules())}
                 self.refresh_rules_display()
                 self.generate_report()
                 
-                messagebox.showinfo("Succès", "Base de données vidée et réinitialisée!")
+                messagebox.showinfo("Succès", "Base de données vidée!\n(Les catégories ont été conservées)")
             except Exception as e:
                 messagebox.showerror("Erreur", f"Erreur lors du vidage: {str(e)}")
 

@@ -213,6 +213,71 @@ class Categorizer:
         
         self.db.connection.commit()
     
+    def ensure_default_categories(self):
+        """Ensure default categories exist without overwriting existing ones"""
+        if not self.db:
+            return
+        
+        # For each default category, check if it exists and add if not
+        for parent_category, subcategories in self.DEFAULT_CATEGORIES_EXPENSES.items():
+            try:
+                self.db.cursor.execute(
+                    "SELECT id FROM categories WHERE name = ? AND parent_id IS NULL",
+                    (parent_category,)
+                )
+                result = self.db.cursor.fetchone()
+                
+                if not result:
+                    # Add parent category
+                    self.db.cursor.execute(
+                        "INSERT INTO categories (name) VALUES (?)",
+                        (parent_category,)
+                    )
+                    parent_id = self.db.cursor.lastrowid
+                    
+                    # Add subcategories
+                    for subcategory in subcategories:
+                        try:
+                            self.db.cursor.execute(
+                                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                                (subcategory, parent_id)
+                            )
+                        except:
+                            pass
+            except:
+                pass
+        
+        # Same for income categories
+        for parent_category, subcategories in self.DEFAULT_CATEGORIES_INCOME.items():
+            try:
+                self.db.cursor.execute(
+                    "SELECT id FROM categories WHERE name = ? AND parent_id IS NULL",
+                    (parent_category,)
+                )
+                result = self.db.cursor.fetchone()
+                
+                if not result:
+                    # Add parent category
+                    self.db.cursor.execute(
+                        "INSERT INTO categories (name) VALUES (?)",
+                        (parent_category,)
+                    )
+                    parent_id = self.db.cursor.lastrowid
+                    
+                    # Add subcategories
+                    for subcategory in subcategories:
+                        try:
+                            self.db.cursor.execute(
+                                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
+                                (subcategory, parent_id)
+                            )
+                        except:
+                            pass
+            except:
+                pass
+        
+        self.db.connection.commit()
+    
     def auto_categorize(self, transaction: Transaction) -> str:
         """Auto-categorize a transaction based on rules"""
         description = transaction.description.lower()
