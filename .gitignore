@@ -24,6 +24,10 @@ data/imports/
 *.db
 *.sqlite
 
+# CSV files (peuvent contenir données sensibles)
+tests/*.csv
+!data/test_100_transactions.csv
+
 # Test coverage
 .coverage
 .pytest_cache/

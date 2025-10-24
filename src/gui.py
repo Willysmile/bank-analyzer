@@ -56,14 +56,12 @@ class BankAnalyzerGUI:
         # Create tabs
         self.import_tab = ttk.Frame(self.notebook)
         self.transactions_tab = ttk.Frame(self.notebook)
-        self.categorize_tab = ttk.Frame(self.notebook)
         self.categories_tab = ttk.Frame(self.notebook)
         self.report_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.import_tab, text="📥 Import")
         self.notebook.add(self.transactions_tab, text="📋 Transactions")
-        self.notebook.add(self.categorize_tab, text="🏷️ Catégoriser")
         self.notebook.add(self.categories_tab, text="📂 Catégories")
         self.notebook.add(self.report_tab, text="📊 Rapports")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
@@ -71,13 +69,18 @@ class BankAnalyzerGUI:
         # Setup each tab
         self.setup_import_tab()
         self.setup_transactions_tab()
-        self.setup_categorize_tab()
         self.setup_categories_tab()
         self.setup_report_tab()
         self.setup_settings_tab()
         
         # Create status bar
         self.create_status_bar()
+        
+        # Initial data load
+        self.update_stats_display()
+        self.refresh_transactions()
+        self.refresh_categories_tree()
+        self.refresh_rules_display()
     
     def setup_styles(self):
         """Configure ttk styles"""
@@ -126,7 +129,7 @@ class BankAnalyzerGUI:
         
         trans_count = len(self.db.get_all_transactions())
         stats_label = tk.Label(stats_frame, 
-                              text=f"📊 {trans_count} transactions | 📂 13 catégories",
+                              text=f"📊 {trans_count} transactions",
                               font=("Arial", 10),
                               bg=self.COLORS['primary'], fg=self.COLORS['light'])
         stats_label.pack()
@@ -152,9 +155,7 @@ class BankAnalyzerGUI:
     def update_stats_display(self):
         """Update header stats"""
         trans_count = len(self.db.get_all_transactions())
-        all_cats = self.categorizer.get_all_categories_with_parent()
-        cat_count = len(all_cats)
-        self.stats_label.config(text=f"📊 {trans_count} transactions | 📂 {cat_count} catégories")
+        self.stats_label.config(text=f"📊 {trans_count} transactions")
 
     
     def setup_import_tab(self):
@@ -237,26 +238,25 @@ class BankAnalyzerGUI:
         self.root.update()
         
         try:
-            transactions, warnings = self.importer.import_file(self.file_path, self.db)
+            transactions, warnings, skipped_count = self.importer.import_file(self.file_path, self.db)
             
-            # Display warnings
-            if warnings:
-                self.import_text.insert(tk.END, "⚠️ Avertissements:\n")
-                for warning in warnings:
-                    self.import_text.insert(tk.END, f"  • {warning}\n")
-                self.import_text.insert(tk.END, "\n")
-            
-            # Insert transactions
-            imported_count = 0
-            for transaction in transactions:
-                self.db.insert_transaction(transaction)
-                imported_count += 1
+            imported_count = len(transactions)
             
             self.import_text.insert(tk.END, f"✅ Succès!\n\n")
             self.import_text.insert(tk.END, f"📊 {imported_count} transactions importées\n")
-            self.import_text.insert(tk.END, f"⚠️ {len(warnings)} avertissements\n")
+            self.import_text.insert(tk.END, f"⏭️ {skipped_count} doublons ignorés\n")
             
-            messagebox.showinfo("Succès", f"{imported_count} transactions importées!")
+            if warnings:
+                self.import_text.insert(tk.END, f"\n⚠️ Avertissements ({len(warnings)}):\n")
+                for warning in warnings:
+                    self.import_text.insert(tk.END, f"  • {warning}\n")
+
+            messagebox.showinfo("Succès", f"{imported_count} transactions importées ({skipped_count} doublons ignorés)!")
+            
+            # Refresh views
+            self.update_stats_display()
+            self.refresh_transactions()
+            self.update_info_text()
             
         except Exception as e:
             self.import_text.insert(tk.END, f"❌ Erreur: {str(e)}\n")
@@ -294,23 +294,27 @@ class BankAnalyzerGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Treeview for transactions
-        columns = ("Date", "Type", "Nom", "Montant", "Catégorie")
-        self.transactions_tree = ttk.Treeview(table_frame, columns=columns, height=20)
+        columns = ("Date", "Type", "Nom", "Montant", "Catégorie", "Sous-catégorie", "Récurrence", "Vital")
+        self.transactions_tree = ttk.Treeview(table_frame, columns=columns, height=20, show="headings")
         
         # Define column headings
-        self.transactions_tree.column("#0", width=0, stretch=tk.NO)
-        self.transactions_tree.column("Date", anchor=tk.W, width=90)
-        self.transactions_tree.column("Type", anchor=tk.W, width=130)
-        self.transactions_tree.column("Nom", anchor=tk.W, width=280)
-        self.transactions_tree.column("Montant", anchor=tk.E, width=100)
-        self.transactions_tree.column("Catégorie", anchor=tk.W, width=140)
+        self.transactions_tree.column("Date", anchor=tk.W, width=70)
+        self.transactions_tree.column("Type", anchor=tk.W, width=80)
+        self.transactions_tree.column("Nom", anchor=tk.W, width=150)
+        self.transactions_tree.column("Montant", anchor=tk.E, width=80)
+        self.transactions_tree.column("Catégorie", anchor=tk.W, width=90)
+        self.transactions_tree.column("Sous-catégorie", anchor=tk.W, width=90)
+        self.transactions_tree.column("Récurrence", anchor=tk.CENTER, width=80)
+        self.transactions_tree.column("Vital", anchor=tk.CENTER, width=60)
         
-        self.transactions_tree.heading("#0", text="", anchor=tk.W)
         self.transactions_tree.heading("Date", text="📅 Date", anchor=tk.W)
         self.transactions_tree.heading("Type", text="🔹 Type", anchor=tk.W)
-        self.transactions_tree.heading("Nom", text="📝 Description", anchor=tk.W)
+        self.transactions_tree.heading("Nom", text="📝 Nom", anchor=tk.W)
         self.transactions_tree.heading("Montant", text="💰 Montant", anchor=tk.E)
-        self.transactions_tree.heading("Catégorie", text="🏷️ Catégorie", anchor=tk.W)
+        self.transactions_tree.heading("Catégorie", text="📂 Catégorie", anchor=tk.W)
+        self.transactions_tree.heading("Sous-catégorie", text="🏷️ Sous-cat.", anchor=tk.W)
+        self.transactions_tree.heading("Récurrence", text="🔄 Récurrence", anchor=tk.CENTER)
+        self.transactions_tree.heading("Vital", text="⭐ Vital", anchor=tk.CENTER)
         
         # Scrollbars
         vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.transactions_tree.yview)
@@ -326,6 +330,9 @@ class BankAnalyzerGUI:
         table_frame.grid_rowconfigure(0, weight=1)
         table_frame.grid_columnconfigure(0, weight=1)
         
+        # Bind right-click to show context menu
+        self.transactions_tree.bind("<Button-3>", self.show_transaction_context_menu)
+        
         # Initial load
         self.refresh_transactions()
 
@@ -337,17 +344,43 @@ class BankAnalyzerGUI:
             self.transactions_tree.delete(item)
         
         # Get transactions
-        transactions = self.db.get_all_transactions()[:self.limit_var.get()]
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
+        
+        # Get all categories to find subcategories
+        all_categories = self.categorizer.get_all_categories_with_parent()
+        
+        # Build a map of category name -> parent name
+        cat_parent_map = {}
+        for cat in all_categories:
+            if cat['parent_id'] is not None:
+                # This is a subcategory
+                parent = next((c for c in all_categories if c['id'] == cat['parent_id']), None)
+                if parent:
+                    cat_parent_map[cat['name']] = parent['name']
         
         # Add to treeview
         for i, t in enumerate(transactions):
             amount_str = f"€{t.amount:.2f}"
             tag = "positive" if t.amount > 0 else "negative"
             
+            # Get parent category if this is a subcategory
+            subcategory = ""
+            if t.category and t.category in cat_parent_map:
+                subcategory = t.category
+                main_category = cat_parent_map[t.category]
+            else:
+                main_category = t.category or "-"
+            
+            # Format recurrence and vital
+            recurrence_text = "✓" if t.recurrence else ""
+            vital_text = "✓" if t.vital else ""
+            
             self.transactions_tree.insert(
                 "",
                 "end",
-                values=(t.date, t.type or "-", t.name or "-", amount_str, t.category or "-"),
+                values=(t.date, t.type or "-", t.name or "-", amount_str, main_category, 
+                       subcategory or "-", recurrence_text, vital_text),
                 tags=(tag,)
             )
         
@@ -355,260 +388,325 @@ class BankAnalyzerGUI:
         self.transactions_tree.tag_configure("positive", foreground="green")
         self.transactions_tree.tag_configure("negative", foreground="red")
     
-    def setup_categorize_tab(self):
-        """Setup the categorization tab with table view"""
-        frame = ttk.Frame(self.categorize_tab, padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Title
-        title = ttk.Label(frame, text="Catégoriser les Transactions", font=("Arial", 14, "bold"))
-        title.pack(pady=10)
-        
-        # Info
-        self.cat_info_label = ttk.Label(frame, text="Chargement...", font=("Arial", 10))
-        self.cat_info_label.pack(pady=5)
-        
-        # Table frame
-        table_frame = ttk.LabelFrame(frame, text="Transactions non catégorisées", padding=5)
-        table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        
-        # Treeview for transactions
-        columns = ("Date", "Type", "Nom", "Montant", "Catégorie")
-        self.cat_tree = ttk.Treeview(table_frame, columns=columns, height=20)
-        
-        # Define columns
-        self.cat_tree.column("#0", width=0, stretch=tk.NO)
-        self.cat_tree.column("Date", anchor=tk.W, width=80)
-        self.cat_tree.column("Type", anchor=tk.W, width=120)
-        self.cat_tree.column("Nom", anchor=tk.W, width=250)
-        self.cat_tree.column("Montant", anchor=tk.E, width=80)
-        self.cat_tree.column("Catégorie", anchor=tk.W, width=120)
-        
-        self.cat_tree.heading("#0", text="", anchor=tk.W)
-        self.cat_tree.heading("Date", text="Date", anchor=tk.W)
-        self.cat_tree.heading("Type", text="Type", anchor=tk.W)
-        self.cat_tree.heading("Nom", text="Nom/Description", anchor=tk.W)
-        self.cat_tree.heading("Montant", text="Montant", anchor=tk.E)
-        self.cat_tree.heading("Catégorie", text="Catégorie", anchor=tk.W)
-        
-        # Scrollbars
-        vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.cat_tree.yview)
-        hsb = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=self.cat_tree.xview)
-        
-        self.cat_tree.configure(yscroll=vsb.set, xscroll=hsb.set)
-        
-        self.cat_tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
-        
-        table_frame.grid_rowconfigure(0, weight=1)
-        table_frame.grid_columnconfigure(0, weight=1)
-        
-        # Bind double-click to categorize
-        self.cat_tree.bind("<Double-1>", self.on_transaction_double_click)
-        
-        # Bottom actions
-        action_frame = ttk.Frame(frame)
-        action_frame.pack(fill=tk.X, pady=10)
-        
-        refresh_btn = ttk.Button(action_frame, text="🔄 Actualiser", command=self.refresh_categorize_tab)
-        refresh_btn.pack(side=tk.LEFT, padx=5)
-        
-        auto_btn = ttk.Button(action_frame, text="🤖 Auto-catégoriser", command=self.auto_categorize_all)
-        auto_btn.pack(side=tk.LEFT, padx=5)
-        
-        self.refresh_categorize_tab()
-    
-    def refresh_categorize_tab(self):
-        """Refresh categorization table"""
-        # Clear table
-        for item in self.cat_tree.get_children():
-            self.cat_tree.delete(item)
-        
-        # Get uncategorized transactions
-        uncategorized = self.categorizer.get_uncategorized()
-        
-        # Add to table
-        for t in uncategorized:
-            amount_str = f"€{t.amount:.2f}"
-            tag = "positive" if t.amount > 0 else "negative"
+    def show_transaction_context_menu(self, event):
+        """Show context menu on right-click"""
+        # Select the row under the cursor
+        row_id = self.transactions_tree.identify_row(event.y)
+        if row_id:
+            self.transactions_tree.selection_set(row_id)
             
-            self.cat_tree.insert(
-                "",
-                "end",
-                iid=t.id,
-                values=(t.date, t.description[:60], amount_str, "-"),
-                tags=(tag,)
-            )
-        
-        # Configure tags
-        self.cat_tree.tag_configure("positive", foreground="green")
-        self.cat_tree.tag_configure("negative", foreground="red")
-        
-        # Update info
-        self.cat_info_label.config(text=f"📊 {len(uncategorized)} transaction(s) à catégoriser")
+            # Create context menu
+            menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(label="🏷️ Catégoriser", command=self.categorize_selected_transaction)
+            menu.add_separator()
+            menu.add_command(label="🔄 Marquer comme récurrente", command=lambda: self.toggle_recurrence(row_id))
+            menu.add_command(label="⭐ Marquer comme vitale", command=lambda: self.toggle_vital(row_id))
+            
+            # Display the menu
+            menu.post(event.x_root, event.y_root)
     
-    def on_transaction_double_click(self, event):
-        """Handle double-click on transaction"""
-        selection = self.cat_tree.selection()
+    def categorize_selected_transaction(self):
+        """Open category selection dialog for selected transaction"""
+        selection = self.transactions_tree.selection()
         if not selection:
             return
         
-        transaction_id = int(selection[0])
+        # Get transaction index from treeview
+        transaction_index = self.transactions_tree.index(selection[0])
         
-        # Get categories
-        categories = self.categorizer.get_categories()
+        # Get all transactions to find the ID
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
+        
+        if transaction_index >= len(transactions):
+            return
+        
+        transaction = transactions[transaction_index]
+        transaction_id = transaction.id
+        
+        # Get all categories with hierarchy
+        all_categories = self.categorizer.get_all_categories_with_parent()
         
         # Create category selection window
         window = tk.Toplevel(self.root)
         window.title("Sélectionner une catégorie")
-        window.geometry("300x400")
+        window.geometry("400x500")
         
         ttk.Label(window, text="Catégorie:", font=("Arial", 12, "bold")).pack(pady=10)
         
-        selected_category = tk.StringVar()
+        # Create a frame with scrollbar for categories using Treeview
+        cat_frame = ttk.Frame(window)
+        cat_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        scrollbar = ttk.Scrollbar(cat_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Use Treeview for hierarchical display
+        cat_tree = ttk.Treeview(cat_frame, yscrollcommand=scrollbar.set, height=15)
+        cat_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=cat_tree.yview)
+        
+        # Build hierarchical tree
+        parent_map = {}
+        for cat in all_categories:
+            if cat['parent_id'] is None:
+                # Parent category
+                parent_map[cat['id']] = cat_tree.insert('', 'end', text=f"📁 {cat['name']}", open=True)
+        
+        # Add subcategories
+        for cat in all_categories:
+            if cat['parent_id'] is not None:
+                parent_id = cat['parent_id']
+                parent_node = parent_map.get(parent_id)
+                if parent_node:
+                    cat_tree.insert(parent_node, 'end', text=f"  ↳ {cat['name']}")
         
         def assign_and_close():
-            cat = selected_category.get()
-            if cat:
-                self.categorizer.categorize_transaction(transaction_id, cat)
-                self.refresh_categorize_tab()
-                window.destroy()
+            selection_item = cat_tree.selection()
+            if selection_item:
+                item_text = cat_tree.item(selection_item[0])['text']
+                # Extract category name from display text
+                selected_cat = item_text.replace("📁 ", "").replace("  ↳ ", "").strip()
+                if selected_cat:
+                    self.categorizer.categorize_transaction(transaction_id, selected_cat)
+                    self.refresh_transactions()
+                    self.update_stats_display()
+                    window.destroy()
         
-        for cat in categories:
-            ttk.Radiobutton(
-                window,
-                text=cat,
-                variable=selected_category,
-                value=cat
-            ).pack(anchor=tk.W, padx=20, pady=5)
-        
-        ttk.Button(window, text="✅ Valider", command=assign_and_close).pack(pady=20)
+        ttk.Button(window, text="✅ Valider", command=assign_and_close).pack(pady=10)
     
-    def auto_categorize_all(self):
-        """Auto-categorize all uncategorized transactions"""
-        uncategorized = self.categorizer.get_uncategorized()
-        count = 0
+    def toggle_recurrence(self, row_id):
+        """Toggle recurrence flag for transaction"""
+        # Get transaction index from treeview
+        transaction_index = self.transactions_tree.index(row_id)
         
-        for t in uncategorized:
-            category = self.categorizer.auto_categorize(t)
-            if self.categorizer.categorize_transaction(t.id, category):
-                count += 1
+        # Get all transactions to find the transaction
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
         
-        messagebox.showinfo("Succès", f"{count} transactions auto-catégorisées!")
-        self.refresh_categorize_tab()
+        if transaction_index >= len(transactions):
+            return
+        
+        transaction = transactions[transaction_index]
+        new_value = not transaction.recurrence
+        
+        # Update database
+        self.db.update_transaction_flags(transaction.id, recurrence=new_value)
+        
+        # Refresh display
+        self.refresh_transactions()
+    
+    def toggle_vital(self, row_id):
+        """Toggle vital flag for transaction"""
+        # Get transaction index from treeview
+        transaction_index = self.transactions_tree.index(row_id)
+        
+        # Get all transactions to find the transaction
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
+        
+        if transaction_index >= len(transactions):
+            return
+        
+        transaction = transactions[transaction_index]
+        new_value = not transaction.vital
+        
+        # Update database
+        self.db.update_transaction_flags(transaction.id, vital=new_value)
+        
+        # Refresh display
+        self.refresh_transactions()
+    
     
     def setup_report_tab(self):
-        """Setup the report tab"""
+        """Setup the report tab with comprehensive statistics and charts"""
         frame = ttk.Frame(self.report_tab, padding=15)
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="📊 Rapports et Statistiques", style='Title.TLabel')
+        title = ttk.Label(frame, text="📊 Rapport Financier Détaillé", style='Title.TLabel')
         title.pack(pady=15)
         
-        # Filters frame
-        filter_frame = ttk.LabelFrame(frame, text="🔍 Paramètres du Rapport", padding=12)
-        filter_frame.pack(fill=tk.X, pady=10)
-        
-        # Date range
-        date_frame = ttk.Frame(filter_frame)
-        date_frame.pack(side=tk.LEFT, padx=10)
-        
-        ttk.Label(date_frame, text="Période:", font=("Arial", 10)).pack(side=tk.LEFT)
-        ttk.Label(date_frame, text="Du", font=("Arial", 9)).pack(side=tk.LEFT, padx=(15, 5))
-        self.start_date_entry = ttk.Entry(date_frame, width=12)
-        self.start_date_entry.pack(side=tk.LEFT, padx=5)
-        self.start_date_entry.insert(0, "2025-01-01")
-        
-        ttk.Label(date_frame, text="Au", font=("Arial", 9)).pack(side=tk.LEFT, padx=(15, 5))
-        self.end_date_entry = ttk.Entry(date_frame, width=12)
-        self.end_date_entry.pack(side=tk.LEFT, padx=5)
-        self.end_date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
-        
-        # Category filter
-        cat_frame = ttk.Frame(filter_frame)
-        cat_frame.pack(side=tk.LEFT, padx=10)
-        
-        ttk.Label(cat_frame, text="Catégorie:", font=("Arial", 10)).pack(side=tk.LEFT)
-        self.category_var = tk.StringVar()
-        categories = ["Toutes"] + self.categorizer.get_categories()
-        cat_combo = ttk.Combobox(cat_frame, textvariable=self.category_var, values=categories, width=15, state="readonly")
-        cat_combo.pack(side=tk.LEFT, padx=5)
-        cat_combo.set("Toutes")
-        
         # Generate button
-        gen_btn = tk.Button(filter_frame, text="📊 Générer le Rapport", 
-                           command=self.generate_report,
+        gen_btn = tk.Button(frame, text="� Générer le Rapport", 
+                           command=self.generate_comprehensive_report,
                            bg=self.COLORS['secondary'], fg=self.COLORS['light'],
-                           font=("Arial", 10, "bold"),
-                           padx=20, cursor="hand2")
-        gen_btn.pack(side=tk.RIGHT, padx=5)
+                           font=("Arial", 12, "bold"),
+                           padx=30, pady=10, cursor="hand2")
+        gen_btn.pack(pady=10)
         
-        # Results area
-        results_frame = ttk.LabelFrame(frame, text="📈 Résultats du Rapport", padding=10)
-        results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        # Create main container with scrollbar
+        container = ttk.Frame(frame)
+        container.pack(fill=tk.BOTH, expand=True)
         
-        # Scrollbar for results
-        scrollbar = ttk.Scrollbar(results_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Canvas with scrollbar for report content
+        canvas = tk.Canvas(container, bg='#f8f9fa')
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        self.report_frame = ttk.Frame(canvas)
         
-        self.report_text = tk.Text(results_frame, height=20, 
-                                   yscrollcommand=scrollbar.set,
-                                   font=("Courier", 10),
-                                   bg='#f8f9fa', fg=self.COLORS['text'])
-        self.report_text.pack(fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.report_text.yview)
+        self.report_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=self.report_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Store canvas for later use
+        self.report_canvas = canvas
     
-    def generate_report(self):
-        """Generate a report"""
-        start_date = self.start_date_entry.get() or None
-        end_date = self.end_date_entry.get() or None
-        category = self.category_var.get()
+    def generate_comprehensive_report(self):
+        """Generate comprehensive report with charts"""
+        # Clear previous report
+        for widget in self.report_frame.winfo_children():
+            widget.destroy()
         
-        if category == "Toutes":
-            category = None
-        
-        self.report_text.delete(1.0, tk.END)
         self.update_status("Génération du rapport en cours...")
         
         try:
-            stats = self.analyzer.get_statistics(start_date, end_date, category)
+            # Get comprehensive report data
+            report_data = self.analyzer.generate_comprehensive_report()
             
-            report = "📊 RAPPORT FINANCIER\n"
-            report += "=" * 60 + "\n\n"
+            stats = report_data['stats']
+            recurrence_stats = report_data['recurrence_stats']
+            vital_stats = report_data['vital_stats']
+            by_category = report_data['by_category']
+            charts = report_data['charts']
             
-            if start_date or end_date:
-                report += f"Période: {start_date or 'Début'} à {end_date or 'Fin'}\n"
-            if category:
-                report += f"Catégorie: {category}\n"
+            # 1. General Statistics Section
+            stats_frame = ttk.LabelFrame(self.report_frame, text="📊 Statistiques Générales", padding=15)
+            stats_frame.pack(fill=tk.X, padx=10, pady=10)
             
-            report += "\n" + "-" * 50 + "\n"
-            report += f"📊 Statistiques Générales\n"
-            report += "-" * 50 + "\n"
-            report += f"Nombre de transactions: {stats['total_transactions']}\n"
-            report += f"Revenu total: €{stats['total_income']:.2f}\n"
-            report += f"Dépenses totales: €{stats['total_expenses']:.2f}\n"
-            report += f"Bilan net: €{stats['net']:.2f}\n"
-            report += f"Moyenne par transaction: €{stats['average_transaction']:.2f}\n"
-            report += f"Plus grand revenu: €{stats['largest_income']:.2f}\n"
-            report += f"Plus grande dépense: €{stats['largest_expense']:.2f}\n"
+            stats_text = f"""
+💰 Revenus totaux: €{stats['total_income']:.2f}
+💸 Dépenses totales: €{stats['total_expenses']:.2f}
+📈 Bilan net: €{stats['net']:.2f}
+📋 Nombre de transactions: {stats['total_transactions']}
+📊 Moyenne par transaction: €{stats['average_transaction']:.2f}
+⬆️ Plus grand revenu: €{stats['largest_income']:.2f}
+⬇️ Plus grande dépense: €{stats['largest_expense']:.2f}
+"""
+            ttk.Label(stats_frame, text=stats_text, font=("Courier", 11), justify=tk.LEFT).pack(anchor=tk.W)
             
-            # Category breakdown
-            if not category:
-                by_cat = self.analyzer.get_by_category(start_date, end_date)
-                if by_cat:
-                    report += "\n" + "-" * 50 + "\n"
-                    report += "📈 Par Catégorie\n"
-                    report += "-" * 50 + "\n"
-                    for cat, amount in by_cat.items():
-                        report += f"{cat}: €{amount:.2f}\n"
+            # 2. Charts Grid
+            charts_container = ttk.Frame(self.report_frame)
+            charts_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
             
-            self.report_text.insert(tk.END, report)
-        
+            # Row 1: Income/Expense and Recurrence charts
+            row1 = ttk.Frame(charts_container)
+            row1.pack(fill=tk.X, pady=5)
+            
+            if charts.get('income_expense'):
+                self.add_chart_to_frame(row1, charts['income_expense'], "Revenus vs Dépenses", side=tk.LEFT)
+            
+            if charts.get('recurrence'):
+                self.add_chart_to_frame(row1, charts['recurrence'], "Dépenses: Récurrentes vs Ponctuelles", side=tk.LEFT)
+            
+            # Row 2: Vital and Top Categories charts
+            row2 = ttk.Frame(charts_container)
+            row2.pack(fill=tk.X, pady=5)
+            
+            if charts.get('vital'):
+                self.add_chart_to_frame(row2, charts['vital'], "Dépenses: Vitales vs Non-vitales", side=tk.LEFT)
+            
+            if charts.get('top_categories'):
+                self.add_chart_to_frame(row2, charts['top_categories'], "Top 10 Catégories", side=tk.LEFT)
+            
+            # 3. Recurrence Statistics Section
+            rec_frame = ttk.LabelFrame(self.report_frame, text="� Analyse des Transactions Récurrentes", padding=15)
+            rec_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            rec_text = f"""
+📊 Transactions récurrentes: {recurrence_stats['recurring_count']}
+📊 Transactions ponctuelles: {recurrence_stats['non_recurring_count']}
+
+💸 Dépenses récurrentes: €{recurrence_stats['recurring_expenses']:.2f}
+💸 Dépenses ponctuelles: €{recurrence_stats['non_recurring_expenses']:.2f}
+
+💰 Revenus récurrents: €{recurrence_stats['recurring_income']:.2f}
+💰 Revenus ponctuels: €{recurrence_stats['non_recurring_income']:.2f}
+
+📈 Bilan net récurrent: €{recurrence_stats['recurring_net']:.2f}
+📈 Bilan net ponctuel: €{recurrence_stats['non_recurring_net']:.2f}
+"""
+            ttk.Label(rec_frame, text=rec_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            # 4. Vital Statistics Section
+            vital_frame = ttk.LabelFrame(self.report_frame, text="⭐ Analyse des Transactions Vitales", padding=15)
+            vital_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            vital_text = f"""
+📊 Transactions vitales: {vital_stats['vital_count']}
+📊 Transactions non-vitales: {vital_stats['non_vital_count']}
+
+💸 Dépenses vitales: €{vital_stats['vital_expenses']:.2f}
+💸 Dépenses non-vitales: €{vital_stats['non_vital_expenses']:.2f}
+
+💰 Revenus vitaux: €{vital_stats['vital_income']:.2f}
+💰 Revenus non-vitaux: €{vital_stats['non_vital_income']:.2f}
+
+📈 Bilan net vital: €{vital_stats['vital_net']:.2f}
+📈 Bilan net non-vital: €{vital_stats['non_vital_net']:.2f}
+"""
+            ttk.Label(vital_frame, text=vital_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            # 5. Category Breakdown
+            if by_category:
+                cat_frame = ttk.LabelFrame(self.report_frame, text="📂 Dépenses par Catégorie", padding=15)
+                cat_frame.pack(fill=tk.X, padx=10, pady=10)
+                
+                cat_text = "\n".join([f"{cat}: €{amount:.2f}" for cat, amount in list(by_category.items())[:15]])
+                ttk.Label(cat_frame, text=cat_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            self.update_status("Rapport généré avec succès!")
+            
         except Exception as e:
-            self.report_text.insert(tk.END, f"❌ Erreur: {str(e)}\n")
-            messagebox.showerror("Erreur", str(e))
+            error_label = ttk.Label(self.report_frame, 
+                                   text=f"❌ Erreur lors de la génération du rapport:\n{str(e)}",
+                                   font=("Arial", 12),
+                                   foreground='red')
+            error_label.pack(pady=20)
+            self.update_status(f"Erreur: {str(e)}")
+    
+    def add_chart_to_frame(self, parent_frame, image_base64, title, side=tk.LEFT):
+        """Add a chart image to a frame"""
+        try:
+            from PIL import Image, ImageTk
+            import base64
+            from io import BytesIO
+            
+            # Decode base64 image
+            image_data = base64.b64decode(image_base64)
+            image = Image.open(BytesIO(image_data))
+            
+            # Resize for display
+            image = image.resize((400, 300), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(image)
+            
+            # Create frame for chart
+            chart_frame = ttk.LabelFrame(parent_frame, text=title, padding=10)
+            chart_frame.pack(side=side, padx=10, pady=10, expand=True)
+            
+            # Add image
+            label = ttk.Label(chart_frame, image=photo)
+            label.image = photo  # Keep reference
+            label.pack()
+            
+        except ImportError:
+            # PIL not available, show error
+            error_label = ttk.Label(parent_frame, 
+                                   text=f"⚠️ {title}\n(PIL requis pour afficher les graphiques)",
+                                   font=("Arial", 10))
+            error_label.pack(side=side, padx=10, pady=10)
+        except Exception as e:
+            error_label = ttk.Label(parent_frame, 
+                                   text=f"❌ Erreur: {str(e)}",
+                                   font=("Arial", 10),
+                                   foreground='red')
+            error_label.pack(side=side, padx=10, pady=10)
     
     def setup_categories_tab(self):
         """Setup categories management tab"""
@@ -632,9 +730,9 @@ class BankAnalyzerGUI:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Use Treeview for hierarchical display
-        self.cat_tree = ttk.Treeview(cat_tree_frame, yscrollcommand=scrollbar.set, height=15)
-        self.cat_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.cat_tree.yview)
+        self.categories_tree = ttk.Treeview(cat_tree_frame, yscrollcommand=scrollbar.set, height=15)
+        self.categories_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.categories_tree.yview)
         
         self.refresh_categories_tree()
         
@@ -672,8 +770,8 @@ class BankAnalyzerGUI:
     def refresh_categories_tree(self):
         """Refresh categories tree view with hierarchy"""
         # Clear existing items
-        for item in self.cat_tree.get_children():
-            self.cat_tree.delete(item)
+        for item in self.categories_tree.get_children():
+            self.categories_tree.delete(item)
         
         # Get all categories
         all_cats = self.categorizer.get_all_categories_with_parent()
@@ -683,19 +781,15 @@ class BankAnalyzerGUI:
         for cat in all_cats:
             if cat['parent_id'] is None:
                 # Add parent category
-                parent_map[cat['id']] = self.cat_tree.insert('', 'end', text=cat['name'])
+                parent_map[cat['id']] = self.categories_tree.insert('', 'end', text=cat['name'], open=True)
         
         # Add subcategories
         for cat in all_cats:
             if cat['parent_id'] is not None:
                 parent_id = cat['parent_id']
-                # Find parent in tree
-                for pc in all_cats:
-                    if pc['id'] == parent_id:
-                        parent_node = parent_map.get(parent_id)
-                        if parent_node:
-                            self.cat_tree.insert(parent_node, 'end', text=f"  {cat['name']}")
-                        break
+                parent_node = parent_map.get(parent_id)
+                if parent_node:
+                    self.categories_tree.insert(parent_node, 'end', text=f"  {cat['name']}")
 
     
     def refresh_rules_display(self):
@@ -760,10 +854,10 @@ class BankAnalyzerGUI:
     
     def delete_category(self):
         """Delete a category"""
-        selection = self.cat_tree.selection()
+        selection = self.categories_tree.selection()
         if selection:
             item_id = selection[0]
-            item_text = self.cat_tree.item(item_id)['text'].strip()
+            item_text = self.categories_tree.item(item_id)['text'].strip()
             if messagebox.askyesno("Confirmer", f"Supprimer '{item_text}'?"):
                 self.categorizer.delete_category(item_text)
                 self.refresh_categories_tree()
@@ -819,9 +913,13 @@ class BankAnalyzerGUI:
         info_frame = ttk.LabelFrame(frame, text="Informations", padding=15)
         info_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        info_text = tk.Text(info_frame, height=10)
-        info_text.pack(fill=tk.BOTH, expand=True)
+        self.info_text = tk.Text(info_frame, height=10)
+        self.info_text.pack(fill=tk.BOTH, expand=True)
         
+        self.update_info_text()
+    
+    def update_info_text(self):
+        """Update the info text in settings tab"""
         info = f"""
 📱 Bank Analyzer v0.1.0
 
@@ -840,8 +938,10 @@ class BankAnalyzerGUI:
 🔒 Aucune synchronisation cloud.
         """
         
-        info_text.insert(tk.END, info)
-        info_text.config(state=tk.DISABLED)
+        self.info_text.config(state=tk.NORMAL)
+        self.info_text.delete(1.0, tk.END)
+        self.info_text.insert(tk.END, info)
+        self.info_text.config(state=tk.DISABLED)
     
     def show_db_stats(self):
         """Show database statistics"""
@@ -891,10 +991,26 @@ Règles: {len(self.categorizer.get_rules())}
                 
                 # Refresh all views
                 self.refresh_transactions()
-                self.refresh_categorize_tab()
                 self.refresh_categories_tree()
                 self.refresh_rules_display()
-                self.generate_report()
+                # Clear report area if exists
+                try:
+                    for widget in self.report_frame.winfo_children():
+                        widget.destroy()
+                except Exception:
+                    pass
+
+                # Update header stats
+                try:
+                    self.update_stats_display()
+                except Exception:
+                    pass
+                
+                # Update info text in settings tab
+                try:
+                    self.update_info_text()
+                except Exception:
+                    pass
                 
                 messagebox.showinfo("Succès", "Base de données vidée!\n(Les catégories ont été conservées)")
             except Exception as e:
@@ -908,8 +1024,17 @@ Règles: {len(self.categorizer.get_rules())}
                 
                 # Refresh all views
                 self.refresh_transactions()
-                self.refresh_categorize_tab()
-                self.generate_report()
+                # Update header stats
+                try:
+                    self.update_stats_display()
+                except Exception:
+                    pass
+                
+                # Update info text in settings tab
+                try:
+                    self.update_info_text()
+                except Exception:
+                    pass
                 
                 messagebox.showinfo("Succès", f"✅ {deleted} transaction(s) dupliquée(s) supprimée(s)!")
             except Exception as e:

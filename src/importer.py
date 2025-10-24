@@ -268,4 +268,4 @@ class CSVImporter:
             for transaction in transactions:
                 db.insert_transaction(transaction)
         
-        return transactions, warnings
+        return transactions, warnings, duplicates_skipped

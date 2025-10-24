@@ -17,6 +17,8 @@ class Transaction:
     category: Optional[str] = None
     type: Optional[str] = None  # PAIEMENT, PRELEVEMENT, VIREMENT, etc.
     name: Optional[str] = None  # Nom du bénéficiaire/prestataire
+    recurrence: bool = False  # Transaction récurrente
+    vital: bool = False  # Transaction vitale
     id: Optional[int] = None
     created_at: Optional[str] = None
 
@@ -47,6 +49,8 @@ class Database:
                 category TEXT,
                 type TEXT,
                 name TEXT,
+                recurrence INTEGER DEFAULT 0,
+                vital INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -81,21 +85,27 @@ class Database:
     def insert_transaction(self, transaction: Transaction) -> int:
         """Insert a transaction into the database"""
         self.cursor.execute("""
-            INSERT INTO transactions (date, description, amount, category, type, name)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (date, description, amount, category, type, name, recurrence, vital)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (transaction.date, transaction.description, transaction.amount, 
-              transaction.category, transaction.type, transaction.name))
+              transaction.category, transaction.type, transaction.name,
+              int(transaction.recurrence), int(transaction.vital)))
         
         self.connection.commit()
         return self.cursor.lastrowid
     
-    def get_all_transactions(self) -> List[Transaction]:
+    def get_all_transactions(self, limit: Optional[int] = None) -> List[Transaction]:
         """Get all transactions"""
-        self.cursor.execute("""
-            SELECT id, date, description, amount, category, type, name, created_at
+        query = """
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, created_at
             FROM transactions
             ORDER BY date DESC
-        """)
+        """
+        
+        if limit:
+            query += f" LIMIT {limit}"
+        
+        self.cursor.execute(query)
         
         results = []
         for row in self.cursor.fetchall():
@@ -107,14 +117,16 @@ class Database:
                 category=row[4],
                 type=row[5],
                 name=row[6],
-                created_at=row[7]
+                recurrence=bool(row[7]),
+                vital=bool(row[8]),
+                created_at=row[9]
             ))
         return results
     
     def get_transactions_by_date_range(self, start_date: str, end_date: str) -> List[Transaction]:
         """Get transactions within a date range"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, type, name, created_at
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, created_at
             FROM transactions
             WHERE date >= ? AND date <= ?
             ORDER BY date DESC
@@ -130,14 +142,16 @@ class Database:
                 category=row[4],
                 type=row[5],
                 name=row[6],
-                created_at=row[7]
+                recurrence=bool(row[7]),
+                vital=bool(row[8]),
+                created_at=row[9]
             ))
         return results
     
     def get_transactions_by_category(self, category: str) -> List[Transaction]:
         """Get transactions by category"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, type, name, created_at
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, created_at
             FROM transactions
             WHERE category = ?
             ORDER BY date DESC
@@ -153,7 +167,9 @@ class Database:
                 category=row[4],
                 type=row[5],
                 name=row[6],
-                created_at=row[7]
+                recurrence=bool(row[7]),
+                vital=bool(row[8]),
+                created_at=row[9]
             ))
         return results
     
@@ -164,6 +180,31 @@ class Database:
             SET category = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (category, transaction_id))
+        
+        self.connection.commit()
+        return self.cursor.rowcount > 0
+    
+    def update_transaction_flags(self, transaction_id: int, recurrence: bool = None, vital: bool = None) -> bool:
+        """Update transaction recurrence and vital flags"""
+        updates = []
+        params = []
+        
+        if recurrence is not None:
+            updates.append("recurrence = ?")
+            params.append(int(recurrence))
+        
+        if vital is not None:
+            updates.append("vital = ?")
+            params.append(int(vital))
+        
+        if not updates:
+            return False
+        
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(transaction_id)
+        
+        query = f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?"
+        self.cursor.execute(query, params)
         
         self.connection.commit()
         return self.cursor.rowcount > 0
