@@ -82,6 +82,54 @@ class CSVImporter:
         except Exception as e:
             raise Exception(f"Error parsing CSV: {str(e)}")
     
+    def _parse_description(self, description: str) -> tuple:
+        """
+        Parse description to extract type and name
+        Examples:
+        - "PAIEMENT PAR CARTE X3573 LIDL 0780" -> ("PAIEMENT", "LIDL 0780")
+        - "PRELEVEMENT Orange SA" -> ("PRELEVEMENT", "Orange SA")
+        - "VIREMENT EN VOTRE FAVEUR LBC France" -> ("VIREMENT", "LBC France")
+        """
+        description = description.strip()
+        
+        # Common transaction types
+        transaction_types = [
+            "PAIEMENT PAR CARTE",
+            "PRELEVEMENT",
+            "VIREMENT",
+            "VIREMENT EN VOTRE FAVEUR",
+            "VIREMENT EMIS",
+            "RETRAIT AU DISTRIBUTEUR",
+            "REMBOURSEMENT DE PRET",
+            "COTISATION",
+            "REGLEMENT",
+            "AVOIR",
+            "INTERETS",
+            "FRAIS"
+        ]
+        
+        transaction_type = "AUTRE"
+        name = description
+        
+        # Find the transaction type
+        for t_type in transaction_types:
+            if description.upper().startswith(t_type):
+                transaction_type = t_type
+                # Extract name after type
+                name = description[len(t_type):].strip()
+                # Clean up extra spaces and take first meaningful part
+                name_parts = name.split()
+                if name_parts:
+                    # For "PAIEMENT PAR CARTE", skip the card reference if it starts with X
+                    if t_type == "PAIEMENT PAR CARTE" and name_parts and name_parts[0].startswith("X"):
+                        name = " ".join(name_parts[1:]) if len(name_parts) > 1 else name
+                break
+        
+        # Clean up name
+        name = name[:50] if name else "-"  # Limit to 50 chars
+        
+        return (transaction_type, name)
+    
     def _clean_amount(self, amount_str: str) -> float:
         """Clean and convert amount string to float"""
         if not amount_str or not amount_str.strip():
@@ -162,10 +210,15 @@ class CSVImporter:
                         warnings.append(f"Row {idx}: Empty description, skipping")
                         continue
                     
+                    # Parse description to extract type and name
+                    trans_type, trans_name = self._parse_description(description)
+                    
                     transaction = Transaction(
                         date=date,
                         description=description,
-                        amount=amount
+                        amount=amount,
+                        type=trans_type,
+                        name=trans_name
                     )
                     
                     # Check for duplicates if db provided

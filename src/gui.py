@@ -174,19 +174,21 @@ class BankAnalyzerGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Treeview for transactions
-        columns = ("Date", "Description", "Montant", "Catégorie")
+        columns = ("Date", "Type", "Nom", "Montant", "Catégorie")
         self.transactions_tree = ttk.Treeview(table_frame, columns=columns, height=20)
         
         # Define column headings
         self.transactions_tree.column("#0", width=0, stretch=tk.NO)
         self.transactions_tree.column("Date", anchor=tk.W, width=80)
-        self.transactions_tree.column("Description", anchor=tk.W, width=400)
+        self.transactions_tree.column("Type", anchor=tk.W, width=120)
+        self.transactions_tree.column("Nom", anchor=tk.W, width=250)
         self.transactions_tree.column("Montant", anchor=tk.E, width=80)
-        self.transactions_tree.column("Catégorie", anchor=tk.W, width=150)
+        self.transactions_tree.column("Catégorie", anchor=tk.W, width=120)
         
         self.transactions_tree.heading("#0", text="", anchor=tk.W)
         self.transactions_tree.heading("Date", text="Date", anchor=tk.W)
-        self.transactions_tree.heading("Description", text="Description", anchor=tk.W)
+        self.transactions_tree.heading("Type", text="Type", anchor=tk.W)
+        self.transactions_tree.heading("Nom", text="Nom/Description", anchor=tk.W)
         self.transactions_tree.heading("Montant", text="Montant", anchor=tk.E)
         self.transactions_tree.heading("Catégorie", text="Catégorie", anchor=tk.W)
         
@@ -224,7 +226,7 @@ class BankAnalyzerGUI:
             self.transactions_tree.insert(
                 "",
                 "end",
-                values=(t.date, t.description[:60], amount_str, t.category or "-"),
+                values=(t.date, t.type or "-", t.name or "-", amount_str, t.category or "-"),
                 tags=(tag,)
             )
         
@@ -250,19 +252,21 @@ class BankAnalyzerGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Treeview for transactions
-        columns = ("Date", "Description", "Montant", "Catégorie")
+        columns = ("Date", "Type", "Nom", "Montant", "Catégorie")
         self.cat_tree = ttk.Treeview(table_frame, columns=columns, height=20)
         
         # Define columns
         self.cat_tree.column("#0", width=0, stretch=tk.NO)
         self.cat_tree.column("Date", anchor=tk.W, width=80)
-        self.cat_tree.column("Description", anchor=tk.W, width=450)
+        self.cat_tree.column("Type", anchor=tk.W, width=120)
+        self.cat_tree.column("Nom", anchor=tk.W, width=250)
         self.cat_tree.column("Montant", anchor=tk.E, width=80)
-        self.cat_tree.column("Catégorie", anchor=tk.W, width=150)
+        self.cat_tree.column("Catégorie", anchor=tk.W, width=120)
         
         self.cat_tree.heading("#0", text="", anchor=tk.W)
         self.cat_tree.heading("Date", text="Date", anchor=tk.W)
-        self.cat_tree.heading("Description", text="Description", anchor=tk.W)
+        self.cat_tree.heading("Type", text="Type", anchor=tk.W)
+        self.cat_tree.heading("Nom", text="Nom/Description", anchor=tk.W)
         self.cat_tree.heading("Montant", text="Montant", anchor=tk.E)
         self.cat_tree.heading("Catégorie", text="Catégorie", anchor=tk.W)
         
@@ -613,7 +617,7 @@ class BankAnalyzerGUI:
         
         ttk.Button(btn_frame, text="📊 Statistiques BD", command=self.show_db_stats).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="💾 Exporter", command=self.export_db).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="🗑️ Vider", command=self.clear_db).pack(side=tk.LEFT, padx=5, background="#ffcccc")
+        ttk.Button(btn_frame, text="🗑️ Vider", command=self.clear_db).pack(side=tk.LEFT, padx=5)
         
         # Info section
         info_frame = ttk.LabelFrame(frame, text="Informations", padding=15)

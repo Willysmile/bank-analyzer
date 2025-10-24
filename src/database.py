@@ -15,6 +15,8 @@ class Transaction:
     description: str
     amount: float
     category: Optional[str] = None
+    type: Optional[str] = None  # PAIEMENT, PRELEVEMENT, VIREMENT, etc.
+    name: Optional[str] = None  # Nom du bénéficiaire/prestataire
     id: Optional[int] = None
     created_at: Optional[str] = None
 
@@ -43,6 +45,8 @@ class Database:
                 description TEXT NOT NULL,
                 amount REAL NOT NULL,
                 category TEXT,
+                type TEXT,
+                name TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -53,9 +57,11 @@ class Database:
             CREATE TABLE IF NOT EXISTS categories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT UNIQUE NOT NULL,
+                parent_id INTEGER,
                 description TEXT,
                 color TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES categories(id)
             )
         """)
         
@@ -75,9 +81,10 @@ class Database:
     def insert_transaction(self, transaction: Transaction) -> int:
         """Insert a transaction into the database"""
         self.cursor.execute("""
-            INSERT INTO transactions (date, description, amount, category)
-            VALUES (?, ?, ?, ?)
-        """, (transaction.date, transaction.description, transaction.amount, transaction.category))
+            INSERT INTO transactions (date, description, amount, category, type, name)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (transaction.date, transaction.description, transaction.amount, 
+              transaction.category, transaction.type, transaction.name))
         
         self.connection.commit()
         return self.cursor.lastrowid
@@ -85,7 +92,7 @@ class Database:
     def get_all_transactions(self) -> List[Transaction]:
         """Get all transactions"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, created_at
+            SELECT id, date, description, amount, category, type, name, created_at
             FROM transactions
             ORDER BY date DESC
         """)
@@ -98,14 +105,16 @@ class Database:
                 description=row[2],
                 amount=row[3],
                 category=row[4],
-                created_at=row[5]
+                type=row[5],
+                name=row[6],
+                created_at=row[7]
             ))
         return results
     
     def get_transactions_by_date_range(self, start_date: str, end_date: str) -> List[Transaction]:
         """Get transactions within a date range"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, created_at
+            SELECT id, date, description, amount, category, type, name, created_at
             FROM transactions
             WHERE date >= ? AND date <= ?
             ORDER BY date DESC
@@ -119,14 +128,16 @@ class Database:
                 description=row[2],
                 amount=row[3],
                 category=row[4],
-                created_at=row[5]
+                type=row[5],
+                name=row[6],
+                created_at=row[7]
             ))
         return results
     
     def get_transactions_by_category(self, category: str) -> List[Transaction]:
         """Get transactions by category"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, created_at
+            SELECT id, date, description, amount, category, type, name, created_at
             FROM transactions
             WHERE category = ?
             ORDER BY date DESC
@@ -140,7 +151,9 @@ class Database:
                 description=row[2],
                 amount=row[3],
                 category=row[4],
-                created_at=row[5]
+                type=row[5],
+                name=row[6],
+                created_at=row[7]
             ))
         return results
     
