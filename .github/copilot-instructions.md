@@ -10,12 +10,15 @@ This project is a bank statement analyzer tool.
 
 ## Key Files
 
-- `main.py` - Application entry point
+- `main.py` - CLI entry point
+- `gui.py` - GUI entry point (Tkinter)
 - `src/cli.py` - Command-line interface
+- `src/gui.py` - Graphical user interface
 - `src/database.py` - SQLite database management
 - `src/importer.py` - CSV import logic
 - `src/categorizer.py` - Transaction categorization
 - `src/analyzer.py` - Statistics and analysis
+- `docs/GUI_GUIDE.md` - GUI usage guide
 - `requirements.txt` - Python dependencies
 
 ## Development Guidelines

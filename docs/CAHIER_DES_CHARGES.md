@@ -88,13 +88,22 @@ Le projet vise à créer un outil d'analyse personnelle des dépenses bancaires,
   - Export en CSV
   - Export en PDF (future)
 
-### 2.2 Phase 2 - Améliorations Futures
+### 2.2 Interface Graphique (Phase 1+)
+- **Plateforme** : Tkinter (built-in, multiplateforme)
+- **Design** : Interface par onglets pour une meilleure ergonomie
+- **Onglets** :
+  - 📥 Import : Upload de fichiers CSV
+  - 📋 Transactions : Visualisation du catalogue complet
+  - 🏷️ Catégorisation : Auto-catégorisation et gestion
+  - 📊 Rapports : Génération de rapports et statistiques
+
+### 2.3 Phase 2 - Améliorations Futures
 - Visualisations graphiques (diagrammes en camembert, courbes)
-- Interface graphique (GUI avec Tkinter ou PyQt)
 - Support de plusieurs banques avec auto-détection du format
 - Budget prévisionnel et alertes de dépassement
 - Synchronisation avec les API des banques
 - Export en fichiers Excel avec formatage avancé
+- Amélioration de la GUI (filtres avancés, graphiques intégrés)
 
 ## 3. Architecture Technique
 
@@ -145,8 +154,6 @@ bank/
 │   └── copilot-instructions.md
 └── README.md                   # Documentation principale
 ```
-
-### 3.3 Modèle de Données
 
 #### Table : transactions
 ```sql

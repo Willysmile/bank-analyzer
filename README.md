@@ -11,6 +11,7 @@ Un outil simple et efficace pour analyser vos relevés bancaires au format CSV.
 - 📊 **Rapports** : Génère des statistiques par période et catégorie
 - 📈 **Tendances** : Visualise tes dépenses sur le temps
 - 🛢️ **Stockage local** : Toutes tes données restent sur ton ordinateur (SQLite)
+- 🖥️ **Interface graphique** : GUI intuitif avec Tkinter
 
 ## Installation
 
@@ -38,7 +39,21 @@ python -m src.cli init
 
 ## Utilisation Rapide
 
-### 1. Importer un fichier CSV
+### Interface Graphique (Recommandée)
+
+```bash
+python gui.py
+```
+
+L'interface graphique offre une expérience plus conviviale avec:
+- 📥 Onglet Import : Charger les fichiers CSV
+- 📋 Onglet Transactions : Afficher toutes tes transactions
+- 🏷️ Onglet Catégorisation : Catégoriser automatiquement
+- 📊 Onglet Rapports : Générer des rapports par période
+
+### Ligne de Commande (Avancée)
+
+#### 1. Importer un fichier CSV
 
 ```bash
 python main.py import-csv /chemin/vers/ton/relevé.csv
