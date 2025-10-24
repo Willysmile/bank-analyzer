@@ -219,8 +219,8 @@ python3 gui.py
 ### Crédit Agricole (testé)
 ```
 Date,Libellé,Débit euros,Crédit euros
-24/10/2025,"PAIEMENT PAR CARTE X3573 LIDL","13,38",
-24/10/2025,"VIREMENT EN VOTRE FAVEUR LBC",,"110,00"
+24/10/2025,"PAIEMENT PAR CARTE X1234 SUPERMARCHE","13,38",
+24/10/2025,"VIREMENT EN VOTRE FAVEUR ENTREPRISE",,"110,00"
 ```
 
 **Caractéristiques détectées :**
