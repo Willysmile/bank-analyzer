@@ -14,12 +14,28 @@ from src.analyzer import Analyzer
 class BankAnalyzerGUI:
     """Main GUI application for Bank Analyzer"""
     
+    # Color scheme
+    COLORS = {
+        'primary': '#2C3E50',      # Dark blue-grey
+        'secondary': '#3498DB',    # Blue
+        'success': '#27AE60',      # Green
+        'warning': '#E74C3C',      # Red
+        'light': '#ECF0F1',        # Light grey
+        'text': '#2C3E50',         # Dark text
+    }
+    
     def __init__(self, root):
         """Initialize the GUI"""
         self.root = root
         self.root.title("Bank Analyzer 🏦")
-        self.root.geometry("1200x800")
+        self.root.geometry("1400x900")
         self.root.resizable(True, True)
+        
+        # Set background color
+        self.root.configure(bg=self.COLORS['primary'])
+        
+        # Configure ttk style
+        self.setup_styles()
         
         # Initialize database
         self.db = Database()
@@ -30,9 +46,12 @@ class BankAnalyzerGUI:
         # Initialize categories
         self.categorizer.init_categories()
         
+        # Create header
+        self.create_header()
+        
         # Create main notebook (tabs)
         self.notebook = ttk.Notebook(root)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Create tabs
         self.import_tab = ttk.Frame(self.notebook)
@@ -45,7 +64,7 @@ class BankAnalyzerGUI:
         self.notebook.add(self.import_tab, text="📥 Import")
         self.notebook.add(self.transactions_tab, text="📋 Transactions")
         self.notebook.add(self.categorize_tab, text="🏷️ Catégoriser")
-        self.notebook.add(self.categories_tab, text="⚙️ Catégories")
+        self.notebook.add(self.categories_tab, text="📂 Catégories")
         self.notebook.add(self.report_tab, text="📊 Rapports")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
         
@@ -56,39 +75,138 @@ class BankAnalyzerGUI:
         self.setup_categories_tab()
         self.setup_report_tab()
         self.setup_settings_tab()
+        
+        # Create status bar
+        self.create_status_bar()
+    
+    def setup_styles(self):
+        """Configure ttk styles"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Configure colors for different elements
+        style.configure('TFrame', background=self.COLORS['light'])
+        style.configure('TLabel', background=self.COLORS['light'], foreground=self.COLORS['text'])
+        style.configure('TButton', font=('Arial', 10))
+        style.configure('TNotebook.Tab', font=('Arial', 10))
+        style.configure('Title.TLabel', font=('Arial', 16, 'bold'), foreground=self.COLORS['text'])
+        style.configure('Heading.TLabel', font=('Arial', 12, 'bold'), foreground=self.COLORS['secondary'])
+        
+        # Configure button styles
+        style.map('TButton',
+                  foreground=[('pressed', self.COLORS['light']),
+                             ('active', self.COLORS['light'])],
+                  background=[('pressed', self.COLORS['secondary']),
+                             ('active', '#2980B9')])
+    
+    def create_header(self):
+        """Create a header section"""
+        header = tk.Frame(self.root, bg=self.COLORS['primary'], height=80)
+        header.pack(fill=tk.X, side=tk.TOP)
+        header.pack_propagate(False)
+        
+        # Logo and title
+        logo_label = tk.Label(header, text="🏦", font=("Arial", 40), 
+                             bg=self.COLORS['primary'], fg=self.COLORS['secondary'])
+        logo_label.pack(side=tk.LEFT, padx=20, pady=10)
+        
+        title_label = tk.Label(header, text="Bank Analyzer", 
+                              font=("Arial", 24, "bold"),
+                              bg=self.COLORS['primary'], fg=self.COLORS['light'])
+        title_label.pack(side=tk.LEFT, padx=0, pady=10)
+        
+        subtitle_label = tk.Label(header, text="Analysez vos dépenses bancaires",
+                                 font=("Arial", 11),
+                                 bg=self.COLORS['primary'], fg='#BDC3C7')
+        subtitle_label.pack(side=tk.LEFT, padx=20, pady=10)
+        
+        # Quick stats on the right
+        stats_frame = tk.Frame(header, bg=self.COLORS['primary'])
+        stats_frame.pack(side=tk.RIGHT, padx=20, pady=10)
+        
+        trans_count = len(self.db.get_all_transactions())
+        stats_label = tk.Label(stats_frame, 
+                              text=f"📊 {trans_count} transactions | 📂 13 catégories",
+                              font=("Arial", 10),
+                              bg=self.COLORS['primary'], fg=self.COLORS['light'])
+        stats_label.pack()
+        
+        self.stats_label = stats_label  # Store reference for updates
+    
+    def create_status_bar(self):
+        """Create a status bar at the bottom"""
+        status_bar = tk.Frame(self.root, bg=self.COLORS['primary'], height=25)
+        status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        status_bar.pack_propagate(False)
+        
+        self.status_text = tk.Label(status_bar, text="Prêt", 
+                                   font=("Arial", 9),
+                                   bg=self.COLORS['primary'], fg=self.COLORS['light'])
+        self.status_text.pack(side=tk.LEFT, padx=10, pady=5)
+    
+    def update_status(self, message):
+        """Update status bar message"""
+        self.status_text.config(text=message)
+        self.root.update()
+    
+    def update_stats_display(self):
+        """Update header stats"""
+        trans_count = len(self.db.get_all_transactions())
+        all_cats = self.categorizer.get_all_categories_with_parent()
+        cat_count = len(all_cats)
+        self.stats_label.config(text=f"📊 {trans_count} transactions | 📂 {cat_count} catégories")
+
     
     def setup_import_tab(self):
         """Setup the import tab"""
-        frame = ttk.Frame(self.import_tab, padding=10)
+        frame = ttk.Frame(self.import_tab, padding=20)
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="Importer un fichier CSV", font=("Arial", 14, "bold"))
-        title.pack(pady=10)
+        title = ttk.Label(frame, text="📥 Importer un fichier CSV", style='Title.TLabel')
+        title.pack(pady=20)
+        
+        # Instructions
+        instructions = ttk.Label(frame, 
+                                text="Sélectionnez un fichier CSV depuis votre banque pour importer les transactions",
+                                font=("Arial", 10),
+                                foreground="gray")
+        instructions.pack(pady=10)
         
         # File selection
-        file_frame = ttk.LabelFrame(frame, text="Sélectionner un fichier", padding=10)
-        file_frame.pack(fill=tk.X, pady=10)
+        file_frame = ttk.LabelFrame(frame, text="📂 Sélectionner un fichier", padding=15)
+        file_frame.pack(fill=tk.X, pady=15)
         
-        self.file_label = ttk.Label(file_frame, text="Aucun fichier sélectionné", foreground="gray")
+        self.file_label = ttk.Label(file_frame, text="Aucun fichier sélectionné", foreground="gray", font=("Arial", 11))
         self.file_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        browse_btn = ttk.Button(file_frame, text="Parcourir...", command=self.browse_file)
+        browse_btn = ttk.Button(file_frame, text="🔍 Parcourir...", command=self.browse_file)
         browse_btn.pack(side=tk.RIGHT, padx=5)
         
-        # Import button
-        import_btn = ttk.Button(frame, text="📥 Importer", command=self.import_file)
-        import_btn.pack(pady=20)
+        # Import section
+        import_frame = tk.Frame(frame, bg=self.COLORS['light'])
+        import_frame.pack(fill=tk.X, pady=20)
+        
+        import_btn = tk.Button(import_frame, text="📥 Importer les données", 
+                              command=self.import_file,
+                              bg=self.COLORS['success'], fg=self.COLORS['light'],
+                              font=("Arial", 12, "bold"),
+                              height=2,
+                              cursor="hand2")
+        import_btn.pack(fill=tk.X)
         
         # Results area
-        results_frame = ttk.LabelFrame(frame, text="Résultats", padding=10)
+        results_frame = ttk.LabelFrame(frame, text="📊 Résultats de l'importation", padding=15)
         results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Scrollbar for results
         scrollbar = ttk.Scrollbar(results_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.import_text = tk.Text(results_frame, height=15, yscrollcommand=scrollbar.set)
+        self.import_text = tk.Text(results_frame, height=15, 
+                                   yscrollcommand=scrollbar.set,
+                                   font=("Courier", 10),
+                                   bg='#f8f9fa', fg=self.COLORS['text'])
         self.import_text.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.import_text.yview)
         
@@ -104,7 +222,9 @@ class BankAnalyzerGUI:
         if file_path:
             self.file_path = file_path
             filename = Path(file_path).name
-            self.file_label.config(text=filename, foreground="black")
+            size_mb = Path(file_path).stat().st_size / (1024 * 1024)
+            self.file_label.config(text=f"✓ {filename} ({size_mb:.2f} MB)", foreground=self.COLORS['success'])
+            self.update_status(f"Fichier sélectionné: {filename}")
     
     def import_file(self):
         """Import the selected CSV file"""
@@ -144,33 +264,33 @@ class BankAnalyzerGUI:
     
     def setup_transactions_tab(self):
         """Setup the transactions tab"""
-        frame = ttk.Frame(self.transactions_tab, padding=10)
+        frame = ttk.Frame(self.transactions_tab, padding=15)
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="Transactions", font=("Arial", 14, "bold"))
-        title.pack(pady=10)
+        title = ttk.Label(frame, text="📋 Transactions", style='Title.TLabel')
+        title.pack(pady=15)
         
         # Filters frame
-        filter_frame = ttk.LabelFrame(frame, text="Filtres", padding=10)
+        filter_frame = ttk.LabelFrame(frame, text="🔍 Filtres et Options", padding=12)
         filter_frame.pack(fill=tk.X, pady=10)
         
-        # Limit selector
+        # Left side - Limit selector
         limit_frame = ttk.Frame(filter_frame)
         limit_frame.pack(side=tk.LEFT, padx=10)
         
-        ttk.Label(limit_frame, text="Afficher:").pack(side=tk.LEFT)
+        ttk.Label(limit_frame, text="Afficher:", font=("Arial", 10)).pack(side=tk.LEFT)
         self.limit_var = tk.IntVar(value=50)
         limit_spin = ttk.Spinbox(limit_frame, from_=10, to=500, textvariable=self.limit_var, width=5)
         limit_spin.pack(side=tk.LEFT, padx=5)
-        ttk.Label(limit_frame, text="dernières transactions").pack(side=tk.LEFT)
+        ttk.Label(limit_frame, text="dernières transactions", font=("Arial", 10)).pack(side=tk.LEFT)
         
-        # Refresh button
+        # Right side - Refresh button
         refresh_btn = ttk.Button(filter_frame, text="🔄 Actualiser", command=self.refresh_transactions)
         refresh_btn.pack(side=tk.RIGHT, padx=5)
         
         # Transactions table
-        table_frame = ttk.LabelFrame(frame, text="Liste", padding=10)
+        table_frame = ttk.LabelFrame(frame, text="💳 Liste des Transactions", padding=10)
         table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Treeview for transactions
@@ -179,18 +299,18 @@ class BankAnalyzerGUI:
         
         # Define column headings
         self.transactions_tree.column("#0", width=0, stretch=tk.NO)
-        self.transactions_tree.column("Date", anchor=tk.W, width=80)
-        self.transactions_tree.column("Type", anchor=tk.W, width=120)
-        self.transactions_tree.column("Nom", anchor=tk.W, width=250)
-        self.transactions_tree.column("Montant", anchor=tk.E, width=80)
-        self.transactions_tree.column("Catégorie", anchor=tk.W, width=120)
+        self.transactions_tree.column("Date", anchor=tk.W, width=90)
+        self.transactions_tree.column("Type", anchor=tk.W, width=130)
+        self.transactions_tree.column("Nom", anchor=tk.W, width=280)
+        self.transactions_tree.column("Montant", anchor=tk.E, width=100)
+        self.transactions_tree.column("Catégorie", anchor=tk.W, width=140)
         
         self.transactions_tree.heading("#0", text="", anchor=tk.W)
-        self.transactions_tree.heading("Date", text="Date", anchor=tk.W)
-        self.transactions_tree.heading("Type", text="Type", anchor=tk.W)
-        self.transactions_tree.heading("Nom", text="Nom/Description", anchor=tk.W)
-        self.transactions_tree.heading("Montant", text="Montant", anchor=tk.E)
-        self.transactions_tree.heading("Catégorie", text="Catégorie", anchor=tk.W)
+        self.transactions_tree.heading("Date", text="📅 Date", anchor=tk.W)
+        self.transactions_tree.heading("Type", text="🔹 Type", anchor=tk.W)
+        self.transactions_tree.heading("Nom", text="📝 Description", anchor=tk.W)
+        self.transactions_tree.heading("Montant", text="💰 Montant", anchor=tk.E)
+        self.transactions_tree.heading("Catégorie", text="🏷️ Catégorie", anchor=tk.W)
         
         # Scrollbars
         vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.transactions_tree.yview)
@@ -208,6 +328,7 @@ class BankAnalyzerGUI:
         
         # Initial load
         self.refresh_transactions()
+
     
     def refresh_transactions(self):
         """Refresh transactions list"""
@@ -379,27 +500,28 @@ class BankAnalyzerGUI:
     
     def setup_report_tab(self):
         """Setup the report tab"""
-        frame = ttk.Frame(self.report_tab, padding=10)
+        frame = ttk.Frame(self.report_tab, padding=15)
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="Rapports et Statistiques", font=("Arial", 14, "bold"))
-        title.pack(pady=10)
+        title = ttk.Label(frame, text="📊 Rapports et Statistiques", style='Title.TLabel')
+        title.pack(pady=15)
         
         # Filters frame
-        filter_frame = ttk.LabelFrame(frame, text="Filtres", padding=10)
+        filter_frame = ttk.LabelFrame(frame, text="🔍 Paramètres du Rapport", padding=12)
         filter_frame.pack(fill=tk.X, pady=10)
         
         # Date range
         date_frame = ttk.Frame(filter_frame)
         date_frame.pack(side=tk.LEFT, padx=10)
         
-        ttk.Label(date_frame, text="Du:").pack(side=tk.LEFT)
+        ttk.Label(date_frame, text="Période:", font=("Arial", 10)).pack(side=tk.LEFT)
+        ttk.Label(date_frame, text="Du", font=("Arial", 9)).pack(side=tk.LEFT, padx=(15, 5))
         self.start_date_entry = ttk.Entry(date_frame, width=12)
         self.start_date_entry.pack(side=tk.LEFT, padx=5)
         self.start_date_entry.insert(0, "2025-01-01")
         
-        ttk.Label(date_frame, text="Au:").pack(side=tk.LEFT)
+        ttk.Label(date_frame, text="Au", font=("Arial", 9)).pack(side=tk.LEFT, padx=(15, 5))
         self.end_date_entry = ttk.Entry(date_frame, width=12)
         self.end_date_entry.pack(side=tk.LEFT, padx=5)
         self.end_date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
@@ -408,7 +530,7 @@ class BankAnalyzerGUI:
         cat_frame = ttk.Frame(filter_frame)
         cat_frame.pack(side=tk.LEFT, padx=10)
         
-        ttk.Label(cat_frame, text="Catégorie:").pack(side=tk.LEFT)
+        ttk.Label(cat_frame, text="Catégorie:", font=("Arial", 10)).pack(side=tk.LEFT)
         self.category_var = tk.StringVar()
         categories = ["Toutes"] + self.categorizer.get_categories()
         cat_combo = ttk.Combobox(cat_frame, textvariable=self.category_var, values=categories, width=15, state="readonly")
@@ -416,18 +538,25 @@ class BankAnalyzerGUI:
         cat_combo.set("Toutes")
         
         # Generate button
-        gen_btn = ttk.Button(filter_frame, text="📊 Générer", command=self.generate_report)
+        gen_btn = tk.Button(filter_frame, text="📊 Générer le Rapport", 
+                           command=self.generate_report,
+                           bg=self.COLORS['secondary'], fg=self.COLORS['light'],
+                           font=("Arial", 10, "bold"),
+                           padx=20, cursor="hand2")
         gen_btn.pack(side=tk.RIGHT, padx=5)
         
         # Results area
-        results_frame = ttk.LabelFrame(frame, text="Résultats", padding=10)
+        results_frame = ttk.LabelFrame(frame, text="📈 Résultats du Rapport", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Scrollbar for results
         scrollbar = ttk.Scrollbar(results_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.report_text = tk.Text(results_frame, height=20, yscrollcommand=scrollbar.set)
+        self.report_text = tk.Text(results_frame, height=20, 
+                                   yscrollcommand=scrollbar.set,
+                                   font=("Courier", 10),
+                                   bg='#f8f9fa', fg=self.COLORS['text'])
         self.report_text.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.report_text.yview)
     
@@ -441,12 +570,13 @@ class BankAnalyzerGUI:
             category = None
         
         self.report_text.delete(1.0, tk.END)
+        self.update_status("Génération du rapport en cours...")
         
         try:
             stats = self.analyzer.get_statistics(start_date, end_date, category)
             
             report = "📊 RAPPORT FINANCIER\n"
-            report += "=" * 50 + "\n\n"
+            report += "=" * 60 + "\n\n"
             
             if start_date or end_date:
                 report += f"Période: {start_date or 'Début'} à {end_date or 'Fin'}\n"
