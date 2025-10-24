@@ -192,3 +192,93 @@ class Categorizer:
             return True
         except:
             return False
+    
+    def get_all_categories_with_parent(self) -> List[Dict]:
+        """Get all categories with their parent information"""
+        if not self.db:
+            return []
+        
+        self.db.cursor.execute("""
+            SELECT id, name, parent_id FROM categories
+            ORDER BY parent_id, name
+        """)
+        
+        categories = []
+        for row in self.db.cursor.fetchall():
+            categories.append({
+                'id': row[0],
+                'name': row[1],
+                'parent_id': row[2]
+            })
+        return categories
+    
+    def add_subcategory(self, subcategory_name: str, parent_category_name: str, description: str = "") -> bool:
+        """Add a subcategory under a parent category"""
+        if not self.db:
+            return False
+        
+        try:
+            # Get parent category id
+            self.db.cursor.execute("SELECT id FROM categories WHERE name = ?", (parent_category_name,))
+            parent_result = self.db.cursor.fetchone()
+            if not parent_result:
+                return False
+            
+            parent_id = parent_result[0]
+            
+            # Insert subcategory
+            self.db.cursor.execute(
+                "INSERT INTO categories (name, parent_id, description) VALUES (?, ?, ?)",
+                (subcategory_name, parent_id, description)
+            )
+            self.db.connection.commit()
+            return True
+        except:
+            return False
+    
+    def get_subcategories(self, parent_category_name: str) -> List[Dict]:
+        """Get all subcategories of a parent category"""
+        if not self.db:
+            return []
+        
+        try:
+            # Get parent category id
+            self.db.cursor.execute("SELECT id FROM categories WHERE name = ?", (parent_category_name,))
+            parent_result = self.db.cursor.fetchone()
+            if not parent_result:
+                return []
+            
+            parent_id = parent_result[0]
+            
+            # Get subcategories
+            self.db.cursor.execute("""
+                SELECT id, name FROM categories WHERE parent_id = ?
+                ORDER BY name
+            """, (parent_id,))
+            
+            subcategories = []
+            for row in self.db.cursor.fetchall():
+                subcategories.append({
+                    'id': row[0],
+                    'name': row[1]
+                })
+            return subcategories
+        except:
+            return []
+    
+    def get_parent_category(self, subcategory_name: str) -> str:
+        """Get the parent category of a subcategory"""
+        if not self.db:
+            return None
+        
+        try:
+            self.db.cursor.execute("""
+                SELECT parent.name FROM categories c
+                JOIN categories parent ON c.parent_id = parent.id
+                WHERE c.name = ?
+            """, (subcategory_name,))
+            
+            result = self.db.cursor.fetchone()
+            return result[0] if result else None
+        except:
+            return None

@@ -486,33 +486,33 @@ class BankAnalyzerGUI:
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="Gestion des Catégories et Règles", font=("Arial", 14, "bold"))
+        title = ttk.Label(frame, text="Gestion des Catégories et Sous-Catégories", font=("Arial", 14, "bold"))
         title.pack(pady=10)
         
-        # Left: Categories
-        left_frame = ttk.LabelFrame(frame, text="Catégories", padding=10)
+        # Left: Categories with tree view
+        left_frame = ttk.LabelFrame(frame, text="Catégories et Sous-Catégories", padding=10)
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         
-        ttk.Label(left_frame, text="Catégories disponibles:", font=("Arial", 10, "bold")).pack(anchor="w")
+        ttk.Label(left_frame, text="Structure hiérarchique:", font=("Arial", 10, "bold")).pack(anchor="w")
         
-        cat_list_frame = ttk.Frame(left_frame)
-        cat_list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        cat_tree_frame = ttk.Frame(left_frame)
+        cat_tree_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
-        scrollbar = ttk.Scrollbar(cat_list_frame)
+        scrollbar = ttk.Scrollbar(cat_tree_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.cat_listbox = tk.Listbox(cat_list_frame, yscrollcommand=scrollbar.set)
-        self.cat_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.cat_listbox.yview)
+        # Use Treeview for hierarchical display
+        self.cat_tree = ttk.Treeview(cat_tree_frame, yscrollcommand=scrollbar.set, height=15)
+        self.cat_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.cat_tree.yview)
         
-        # Refresh categories list
-        for cat in self.categorizer.get_categories():
-            self.cat_listbox.insert(tk.END, cat)
+        self.refresh_categories_tree()
         
         cat_btn_frame = ttk.Frame(left_frame)
         cat_btn_frame.pack(fill=tk.X)
         
-        ttk.Button(cat_btn_frame, text="➕ Ajouter", command=self.add_category).pack(side=tk.LEFT, padx=5, pady=5)
+        ttk.Button(cat_btn_frame, text="➕ Ajouter catégorie", command=self.add_category).pack(side=tk.LEFT, padx=5, pady=5)
+        ttk.Button(cat_btn_frame, text="➕ Ajouter sous-catégorie", command=self.add_subcategory).pack(side=tk.LEFT, padx=5, pady=5)
         ttk.Button(cat_btn_frame, text="❌ Supprimer", command=self.delete_category).pack(side=tk.LEFT, padx=5, pady=5)
         
         # Right: Rules
@@ -539,6 +539,35 @@ class BankAnalyzerGUI:
         ttk.Button(rules_btn_frame, text="➕ Ajouter règle", command=self.add_rule).pack(side=tk.LEFT, padx=5, pady=5)
         ttk.Button(rules_btn_frame, text="🔄 Actualiser", command=self.refresh_rules_display).pack(side=tk.LEFT, padx=5, pady=5)
     
+    def refresh_categories_tree(self):
+        """Refresh categories tree view with hierarchy"""
+        # Clear existing items
+        for item in self.cat_tree.get_children():
+            self.cat_tree.delete(item)
+        
+        # Get all categories
+        all_cats = self.categorizer.get_all_categories_with_parent()
+        
+        # Create mapping of parent categories
+        parent_map = {}
+        for cat in all_cats:
+            if cat['parent_id'] is None:
+                # Add parent category
+                parent_map[cat['id']] = self.cat_tree.insert('', 'end', text=cat['name'])
+        
+        # Add subcategories
+        for cat in all_cats:
+            if cat['parent_id'] is not None:
+                parent_id = cat['parent_id']
+                # Find parent in tree
+                for pc in all_cats:
+                    if pc['id'] == parent_id:
+                        parent_node = parent_map.get(parent_id)
+                        if parent_node:
+                            self.cat_tree.insert(parent_node, 'end', text=f"  {cat['name']}")
+                        break
+
+    
     def refresh_rules_display(self):
         """Refresh rules display"""
         self.rules_text.config(state=tk.NORMAL)
@@ -562,17 +591,53 @@ class BankAnalyzerGUI:
         dialog = simpledialog.askstring("Ajouter une catégorie", "Nom de la catégorie:")
         if dialog:
             self.categorizer.add_category(dialog)
-            self.cat_listbox.insert(tk.END, dialog)
+            self.refresh_categories_tree()
             messagebox.showinfo("Succès", f"Catégorie '{dialog}' ajoutée!")
+    
+    def add_subcategory(self):
+        """Add a new subcategory under a parent"""
+        # First, ask for parent category
+        categories = [cat['name'] for cat in self.categorizer.get_all_categories_with_parent() if cat['parent_id'] is None]
+        
+        if not categories:
+            messagebox.showwarning("Attention", "Aucune catégorie parent disponible")
+            return
+        
+        parent_window = tk.Toplevel(self.root)
+        parent_window.title("Sélectionner la catégorie parent")
+        parent_window.geometry("300x200")
+        
+        selected_parent = tk.StringVar()
+        
+        ttk.Label(parent_window, text="Catégorie parent:", font=("Arial", 10, "bold")).pack(anchor="w", padx=10, pady=10)
+        
+        for cat in categories:
+            ttk.Radiobutton(parent_window, text=cat, variable=selected_parent, value=cat).pack(anchor=tk.W, padx=30)
+        
+        def select_parent():
+            if selected_parent.get():
+                parent_window.destroy()
+                
+                # Now ask for subcategory name
+                subcat_name = simpledialog.askstring("Ajouter une sous-catégorie", 
+                                                      f"Nom de la sous-catégorie pour '{selected_parent.get()}':")
+                if subcat_name:
+                    self.categorizer.add_subcategory(subcat_name, selected_parent.get())
+                    self.refresh_categories_tree()
+                    messagebox.showinfo("Succès", f"Sous-catégorie '{subcat_name}' ajoutée!")
+        
+        ttk.Button(parent_window, text="Continuer", command=select_parent).pack(pady=10)
     
     def delete_category(self):
         """Delete a category"""
-        sel = self.cat_listbox.curselection()
-        if sel:
-            cat = self.cat_listbox.get(sel[0])
-            if messagebox.askyesno("Confirmer", f"Supprimer '{cat}'?"):
-                self.categorizer.delete_category(cat)
-                self.cat_listbox.delete(sel[0])
+        selection = self.cat_tree.selection()
+        if selection:
+            item_id = selection[0]
+            item_text = self.cat_tree.item(item_id)['text'].strip()
+            if messagebox.askyesno("Confirmer", f"Supprimer '{item_text}'?"):
+                self.categorizer.delete_category(item_text)
+                self.refresh_categories_tree()
+
     
     def add_rule(self):
         """Add a new categorization rule"""
