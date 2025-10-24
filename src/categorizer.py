@@ -161,6 +161,14 @@ class Categorizer:
         if not self.db:
             return
         
+        # Check if categories table is empty
+        self.db.cursor.execute("SELECT COUNT(*) FROM categories WHERE parent_id IS NULL")
+        parent_count = self.db.cursor.fetchone()[0]
+        
+        # Only reinitialize if no parent categories exist
+        if parent_count > 0:
+            return
+        
         # Initialize expense categories with subcategories
         for parent_category, subcategories in self.DEFAULT_CATEGORIES_EXPENSES.items():
             try:
@@ -179,23 +187,8 @@ class Categorizer:
                         )
                     except:
                         pass
-            except:
-                # Category already exists, try to add subcategories
-                self.db.cursor.execute(
-                    "SELECT id FROM categories WHERE name = ? AND parent_id IS NULL",
-                    (parent_category,)
-                )
-                result = self.db.cursor.fetchone()
-                if result:
-                    parent_id = result[0]
-                    for subcategory in subcategories:
-                        try:
-                            self.db.cursor.execute(
-                                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
-                                (subcategory, parent_id)
-                            )
-                        except:
-                            pass
+            except Exception as e:
+                pass
         
         # Initialize income categories with subcategories
         for parent_category, subcategories in self.DEFAULT_CATEGORIES_INCOME.items():
@@ -215,23 +208,8 @@ class Categorizer:
                         )
                     except:
                         pass
-            except:
-                # Category already exists, try to add subcategories
-                self.db.cursor.execute(
-                    "SELECT id FROM categories WHERE name = ? AND parent_id IS NULL",
-                    (parent_category,)
-                )
-                result = self.db.cursor.fetchone()
-                if result:
-                    parent_id = result[0]
-                    for subcategory in subcategories:
-                        try:
-                            self.db.cursor.execute(
-                                "INSERT INTO categories (name, parent_id) VALUES (?, ?)",
-                                (subcategory, parent_id)
-                            )
-                        except:
-                            pass
+            except Exception as e:
+                pass
         
         self.db.connection.commit()
     
