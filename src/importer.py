@@ -90,6 +90,10 @@ class CSVImporter:
         - "PRELEVEMENT Orange SA" -> ("PRELEVEMENT", "Orange SA")
         - "VIREMENT EN VOTRE FAVEUR LBC France" -> ("VIREMENT", "LBC France")
         """
+        # Clean up multi-line descriptions (replace newlines with spaces)
+        description = description.replace('\n', ' ').replace('\r', ' ')
+        # Remove extra spaces
+        description = ' '.join(description.split())
         description = description.strip()
         
         # Common transaction types
@@ -131,13 +135,29 @@ class CSVImporter:
         return (transaction_type, name)
     
     def _clean_amount(self, amount_str: str) -> float:
-        """Clean and convert amount string to float"""
+        """Clean and convert amount string to float
+        Handles various formats:
+        - Spaces: 1 330,55 or 1 330.55
+        - Non-breaking spaces: 1\xa0330,55
+        - Commas: 1,330.55 or 1,330,55
+        """
         if not amount_str or not amount_str.strip():
             return 0.0
         
-        # Remove spaces and normalize decimal separator
-        amount_str = amount_str.strip().replace(' ', '')
+        # Remove all spaces and non-breaking spaces
+        amount_str = amount_str.replace(' ', '').replace('\xa0', '')
+        amount_str = amount_str.strip()
+        
+        # Normalize decimal separator: comma to dot
         amount_str = amount_str.replace(',', '.')
+        
+        # Remove thousands separator (if present)
+        # e.g., "1.330,55" (European format) should become "1330.55"
+        if amount_str.count('.') > 1:
+            # Multiple dots: it's a thousands separator issue
+            # Keep only the last dot as decimal
+            parts = amount_str.split('.')
+            amount_str = ''.join(parts[:-1]) + '.' + parts[-1]
         
         try:
             return float(amount_str)
