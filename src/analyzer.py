@@ -193,15 +193,23 @@ class Analyzer:
         
         return image_base64
     
-    def generate_comprehensive_report(self) -> Dict:
-        """Generate comprehensive report with all statistics and charts"""
-        stats = self.get_statistics()
-        by_category = self.get_by_category()
-        recurrence_stats = self.get_recurrence_statistics()
-        vital_stats = self.get_vital_statistics()
+    def generate_comprehensive_report(self, start_date: str = None, end_date: str = None) -> Dict:
+        """Generate comprehensive report with all statistics and charts
+        
+        Args:
+            start_date: Filter from this date (format: YYYY-MM-DD or DD/MM/YYYY)
+            end_date: Filter to this date (format: YYYY-MM-DD or DD/MM/YYYY)
+        """
+        stats = self.get_statistics(start_date, end_date)
+        by_category = self.get_by_category(start_date, end_date)
+        recurrence_stats = self.get_recurrence_statistics(start_date, end_date)
+        vital_stats = self.get_vital_statistics(start_date, end_date)
         
         # Separate expenses and income categories
-        transactions = self.db.get_all_transactions()
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
         
         expenses_by_cat = defaultdict(float)
         income_by_cat = defaultdict(float)

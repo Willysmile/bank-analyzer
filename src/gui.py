@@ -527,8 +527,26 @@ class BankAnalyzerGUI:
         title = ttk.Label(frame, text="📊 Rapport Financier Détaillé", style='Title.TLabel')
         title.pack(pady=15)
         
+        # Date selection frame
+        date_frame = ttk.LabelFrame(frame, text="📅 Sélection des dates", padding=10)
+        date_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # From date
+        ttk.Label(date_frame, text="Du (inclus):").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.report_from_date = ttk.Entry(date_frame, width=15)
+        self.report_from_date.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        self.report_from_date.insert(0, "")
+        ttk.Label(date_frame, text="(DD/MM/YYYY ou laisser vide)", font=("Arial", 9)).grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
+        
+        # To date
+        ttk.Label(date_frame, text="Au (inclus):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        self.report_to_date = ttk.Entry(date_frame, width=15)
+        self.report_to_date.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        self.report_to_date.insert(0, "")
+        ttk.Label(date_frame, text="(DD/MM/YYYY ou laisser vide)", font=("Arial", 9)).grid(row=1, column=2, sticky=tk.W, padx=5, pady=5)
+        
         # Generate button
-        gen_btn = tk.Button(frame, text="� Générer le Rapport", 
+        gen_btn = tk.Button(frame, text="🔄 Générer le Rapport", 
                            command=self.generate_comprehensive_report,
                            bg=self.COLORS['secondary'], fg=self.COLORS['light'],
                            font=("Arial", 12, "bold"),
@@ -567,8 +585,27 @@ class BankAnalyzerGUI:
         self.update_status("Génération du rapport en cours...")
         
         try:
+            # Get date filters
+            start_date = self.report_from_date.get().strip() if self.report_from_date.get() else None
+            end_date = self.report_to_date.get().strip() if self.report_to_date.get() else None
+            
+            # Convert DD/MM/YYYY to YYYY-MM-DD if needed
+            if start_date and len(start_date) == 10 and start_date[2] == '/' and start_date[5] == '/':
+                try:
+                    parts = start_date.split('/')
+                    start_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                except:
+                    start_date = None
+                    
+            if end_date and len(end_date) == 10 and end_date[2] == '/' and end_date[5] == '/':
+                try:
+                    parts = end_date.split('/')
+                    end_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                except:
+                    end_date = None
+            
             # Get comprehensive report data
-            report_data = self.analyzer.generate_comprehensive_report()
+            report_data = self.analyzer.generate_comprehensive_report(start_date, end_date)
             
             stats = report_data['stats']
             recurrence_stats = report_data['recurrence_stats']
@@ -576,8 +613,13 @@ class BankAnalyzerGUI:
             by_category = report_data['by_category']
             charts = report_data['charts']
             
+            # Display date range in title
+            date_info = ""
+            if start_date or end_date:
+                date_info = f" ({start_date or 'début'} à {end_date or 'fin'})"
+            
             # 1. General Statistics Section
-            stats_frame = ttk.LabelFrame(self.report_frame, text="📊 Statistiques Générales", padding=15)
+            stats_frame = ttk.LabelFrame(self.report_frame, text="📊 Statistiques Générales" + date_info, padding=15)
             stats_frame.pack(fill=tk.X, padx=10, pady=10)
             
             stats_text = f"""
