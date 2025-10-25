@@ -64,6 +64,7 @@ class BankAnalyzerGUI:
         self.settings_tab = ttk.Frame(self.notebook)
         self.budget_tab = ttk.Frame(self.notebook)
         self.statistics_tab = ttk.Frame(self.notebook)
+        self.forecast_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.dashboard_tab, text="📊 Tableau de Bord")
         self.notebook.add(self.import_tab, text="📥 Import")
@@ -73,6 +74,7 @@ class BankAnalyzerGUI:
         self.notebook.add(self.report_tab, text="� Rapports")
         self.notebook.add(self.budget_tab, text="💰 Budget")
         self.notebook.add(self.statistics_tab, text="📊 Statistiques")
+        self.notebook.add(self.forecast_tab, text="🔮 Prévisionnel")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
         
         # Setup each tab
@@ -84,6 +86,7 @@ class BankAnalyzerGUI:
         self.setup_report_tab()
         self.setup_budget_tab()
         self.setup_statistics_tab()
+        self.setup_forecast_tab()
         self.setup_settings_tab()
         
         # Create status bar
@@ -660,6 +663,173 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
                     self.refresh_budget_tab()
                     messagebox.showinfo("Succès", "Objectif supprimé")
                     break
+    
+    def setup_forecast_tab(self):
+        """Setup forecast/prévisionnel tab"""
+        frame = ttk.Frame(self.forecast_tab, padding=15)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title = ttk.Label(frame, text="🔮 Prévisionnel du Mois Suivant", style='Title.TLabel')
+        title.pack(pady=15)
+        
+        # Info label
+        info_text = "Récurrences du mois précédent - Modifiez les montants pour anticiper le mois suivant"
+        ttk.Label(frame, text=info_text, font=("Arial", 9, "italic")).pack()
+        
+        # Button frame
+        button_frame = ttk.Frame(frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        refresh_btn = tk.Button(button_frame, text="🔄 Actualiser",
+                               command=self.refresh_forecast,
+                               bg=self.COLORS['secondary'], fg=self.COLORS['light'],
+                               font=("Arial", 10, "bold"), padx=15, pady=8, cursor="hand2")
+        refresh_btn.pack(side=tk.LEFT, padx=5)
+        
+        reset_btn = tk.Button(button_frame, text="🔁 Réinitialiser Prévisions",
+                             command=self.reset_forecast,
+                             bg=self.COLORS['warning'], fg=self.COLORS['light'],
+                             font=("Arial", 10, "bold"), padx=15, pady=8, cursor="hand2")
+        reset_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Summary frame
+        summary_frame = ttk.LabelFrame(frame, text="📊 Résumé", padding=10)
+        summary_frame.pack(fill=tk.X, pady=10)
+        
+        self.forecast_summary_label = ttk.Label(summary_frame, text="", font=("Courier", 10), justify=tk.LEFT)
+        self.forecast_summary_label.pack(anchor=tk.W)
+        
+        # Table frame
+        table_frame = ttk.LabelFrame(frame, text="📋 Récurrences Prévues", padding=10)
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Treeview with editable cells
+        columns = ("Description", "Catégorie", "Récurrence", "Montant Original", "Prévision Mois Suivant")
+        self.forecast_tree = ttk.Treeview(table_frame, columns=columns, height=15, show="headings")
+        
+        self.forecast_tree.column("Description", anchor=tk.W, width=200)
+        self.forecast_tree.column("Catégorie", anchor=tk.CENTER, width=120)
+        self.forecast_tree.column("Récurrence", anchor=tk.CENTER, width=100)
+        self.forecast_tree.column("Montant Original", anchor=tk.E, width=120)
+        self.forecast_tree.column("Prévision Mois Suivant", anchor=tk.E, width=150)
+        
+        for col in columns:
+            self.forecast_tree.heading(col, text=col)
+        
+        # Scrollbars
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.forecast_tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.forecast_tree.xview)
+        self.forecast_tree.configure(yscroll=vsb.set, xscroll=hsb.set)
+        
+        self.forecast_tree.grid(row=0, column=0, sticky=tk.NSEW)
+        vsb.grid(row=0, column=1, sticky=tk.NS)
+        hsb.grid(row=1, column=0, sticky=tk.EW)
+        
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+        
+        # Bind double-click to edit
+        self.forecast_tree.bind("<Double-1>", self.edit_forecast_cell)
+        
+        # Store forecast data
+        self.forecast_data = {}
+        
+        # Initial refresh
+        self.refresh_forecast()
+    
+    def refresh_forecast(self):
+        """Refresh forecast display"""
+        # Clear tree
+        for item in self.forecast_tree.get_children():
+            self.forecast_tree.delete(item)
+        
+        try:
+            forecast_data = self.analyzer.get_forecast_data()
+            self.forecast_data = {i: item for i, item in enumerate(forecast_data)}
+            
+            total_original = 0.0
+            total_modified = 0.0
+            
+            for i, item in enumerate(forecast_data):
+                total_original += item['amount']
+                total_modified += item['modified']
+                
+                self.forecast_tree.insert(
+                    "",
+                    "end",
+                    iid=str(i),
+                    values=(
+                        item['description'][:50],
+                        item['category'],
+                        item['type'],
+                        f"€{item['amount']:.2f}",
+                        f"€{item['modified']:.2f}"
+                    )
+                )
+            
+            # Update summary
+            difference = total_modified - total_original
+            diff_text = f"+€{difference:.2f}" if difference > 0 else f"€{difference:.2f}"
+            summary = f"Total Original: €{total_original:.2f} | Total Prévisionnel: €{total_modified:.2f} | Différence: {diff_text}"
+            self.forecast_summary_label.config(text=summary)
+            
+            self.update_status("Prévisions actualisées")
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du chargement des prévisions:\n{str(e)}")
+    
+    def edit_forecast_cell(self, event):
+        """Edit forecast cell on double-click"""
+        item = self.forecast_tree.selection()[0]
+        col = self.forecast_tree.identify_column(event.x)
+        
+        # Only allow editing of last column (index 4)
+        if col != "#5":
+            return
+        
+        try:
+            idx = int(item)
+            old_value = self.forecast_tree.item(item, 'values')[4].replace('€', '').strip()
+            
+            # Create edit dialog
+            dialog = tk.Toplevel(self.root)
+            dialog.title("Modifier Prévision")
+            dialog.geometry("300x120")
+            dialog.resizable(False, False)
+            
+            ttk.Label(dialog, text=f"Description: {self.forecast_data[idx]['description'][:40]}").pack(padx=10, pady=10)
+            ttk.Label(dialog, text="Nouveau montant (€):").pack(padx=10, pady=5)
+            
+            entry = ttk.Entry(dialog, width=20)
+            entry.insert(0, old_value)
+            entry.pack(padx=10, pady=5)
+            entry.focus()
+            
+            def save():
+                try:
+                    new_value = float(entry.get())
+                    if new_value < 0:
+                        messagebox.showerror("Erreur", "Le montant doit être positif")
+                        return
+                    
+                    self.forecast_data[idx]['modified'] = new_value
+                    self.refresh_forecast()
+                    dialog.destroy()
+                except ValueError:
+                    messagebox.showerror("Erreur", "Veuillez entrer un nombre valide")
+            
+            ttk.Button(dialog, text="✅ Sauvegarder", command=save).pack(pady=10)
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'édition: {str(e)}")
+    
+    def reset_forecast(self):
+        """Reset forecast to original values"""
+        if messagebox.askyesno("Confirmation", "Réinitialiser toutes les prévisions aux montants originaux ?"):
+            for item in self.forecast_data.values():
+                item['modified'] = item['amount']
+            self.refresh_forecast()
     
     def create_status_bar(self):
         """Create a status bar at the bottom"""

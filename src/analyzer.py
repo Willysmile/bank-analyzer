@@ -686,4 +686,42 @@ class Analyzer:
             'months': month_labels,
             'categories': result
         }
+    
+    def get_forecast_data(self) -> Dict:
+        """Get recurring transactions from last month for forecasting"""
+        # Get last month dates
+        today = datetime.now()
+        last_month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        last_month_end = today.replace(day=1) - timedelta(days=1)
+        
+        # Get recurring transactions from last month
+        transactions = self.db.get_transactions_by_date_range(
+            last_month_start.strftime("%Y-%m-%d"),
+            last_month_end.strftime("%Y-%m-%d")
+        )
+        
+        # Filter recurring
+        recurring = [t for t in transactions if t.recurrence and t.recurrence != "non-récurrent"]
+        
+        # Group by description
+        forecast_dict = defaultdict(lambda: {'amount': 0.0, 'category': '', 'type': ''})
+        for trans in recurring:
+            key = trans.description
+            if key not in forecast_dict:
+                forecast_dict[key]['amount'] = abs(trans.amount)
+                forecast_dict[key]['category'] = trans.category
+                forecast_dict[key]['type'] = trans.recurrence
+        
+        # Convert to list
+        forecast = []
+        for description, data in forecast_dict.items():
+            forecast.append({
+                'description': description or "Récurrence sans description",
+                'amount': round(data['amount'], 2),
+                'category': data['category'],
+                'type': data['type'],
+                'modified': round(data['amount'], 2)
+            })
+        
+        return sorted(forecast, key=lambda x: x['amount'], reverse=True)
 
