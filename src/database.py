@@ -294,4 +294,69 @@ class Database:
         
         self.connection.commit()
         return self.cursor.rowcount > 0
+    
+    # Tag management methods
+    def add_tag(self, name: str, color: str = '#3498DB') -> int:
+        """Add a new tag"""
+        self.cursor.execute("""
+            INSERT OR IGNORE INTO tags (name, color)
+            VALUES (?, ?)
+        """, (name, color))
+        self.connection.commit()
+        
+        self.cursor.execute("SELECT id FROM tags WHERE name = ?", (name,))
+        return self.cursor.fetchone()[0]
+    
+    def get_all_tags(self) -> List[Tuple[int, str, str]]:
+        """Get all tags"""
+        self.cursor.execute("SELECT id, name, color FROM tags ORDER BY name")
+        return self.cursor.fetchall()
+    
+    def tag_transaction(self, transaction_id: int, tag_id: int) -> bool:
+        """Add a tag to a transaction"""
+        self.cursor.execute("""
+            INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id)
+            VALUES (?, ?)
+        """, (transaction_id, tag_id))
+        self.connection.commit()
+        return self.cursor.rowcount > 0
+    
+    def remove_tag_from_transaction(self, transaction_id: int, tag_id: int) -> bool:
+        """Remove a tag from a transaction"""
+        self.cursor.execute("""
+            DELETE FROM transaction_tags
+            WHERE transaction_id = ? AND tag_id = ?
+        """, (transaction_id, tag_id))
+        self.connection.commit()
+        return self.cursor.rowcount > 0
+    
+    def get_transaction_tags(self, transaction_id: int) -> List[Tuple[int, str, str]]:
+        """Get all tags for a transaction"""
+        self.cursor.execute("""
+            SELECT t.id, t.name, t.color
+            FROM tags t
+            JOIN transaction_tags tt ON t.id = tt.tag_id
+            WHERE tt.transaction_id = ?
+            ORDER BY t.name
+        """, (transaction_id,))
+        return self.cursor.fetchall()
+    
+    def update_transaction_notes(self, transaction_id: int, notes: str) -> bool:
+        """Update notes for a transaction"""
+        self.cursor.execute("""
+            UPDATE transactions
+            SET notes = ?
+            WHERE id = ?
+        """, (notes, transaction_id))
+        self.connection.commit()
+        return self.cursor.rowcount > 0
+    
+    def get_transaction_notes(self, transaction_id: int) -> str:
+        """Get notes for a transaction"""
+        self.cursor.execute("SELECT notes FROM transactions WHERE id = ?", (transaction_id,))
+        result = self.cursor.fetchone()
+        return result[0] if result else ""
+
+
+
 

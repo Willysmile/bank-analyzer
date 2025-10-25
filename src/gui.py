@@ -958,6 +958,42 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             self.import_text.insert(tk.END, f"❌ Erreur: {str(e)}\n")
             messagebox.showerror("Erreur", str(e))
     
+    def export_report_pdf(self):
+        """Export monthly report to PDF"""
+        try:
+            # Get date filters
+            start_date = None
+            end_date = None
+            
+            if self.report_from_date_enabled.get():
+                start_date = self.report_from_date.get_date().strftime("%Y-%m-%d")
+                
+            if self.report_to_date_enabled.get():
+                end_date = self.report_to_date.get_date().strftime("%Y-%m-%d")
+            
+            # Ask for file location
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF Files", "*.pdf"), ("All Files", "*.*")],
+                initialfile=f"Rapport_Financier_{datetime.now().strftime('%Y%m%d')}.pdf"
+            )
+            
+            if not file_path:
+                return
+            
+            self.update_status("Export PDF en cours...")
+            success = self.analyzer.export_monthly_report(file_path, start_date, end_date)
+            
+            if success:
+                messagebox.showinfo("Succès", f"📄 Rapport exporté:\n{file_path}")
+                self.update_status("PDF exporté avec succès")
+            else:
+                messagebox.showerror("Erreur", "Erreur lors de l'export PDF")
+                self.update_status("Erreur lors de l'export")
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'export: {str(e)}")
+    
     def setup_transactions_tab(self):
         """Setup the transactions tab"""
         frame = ttk.Frame(self.transactions_tab, padding=15)
@@ -1101,6 +1137,9 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             menu.add_command(label="🔄 Marquer comme récurrente", command=lambda: self.toggle_recurrence(row_id))
             menu.add_command(label="⭐ Marquer comme vitale", command=lambda: self.toggle_vital(row_id))
             menu.add_command(label="💾 Marquer comme épargne", command=lambda: self.toggle_savings(row_id))
+            menu.add_separator()
+            menu.add_command(label="📝 Ajouter une note", command=lambda: self.edit_transaction_notes(row_id))
+            menu.add_command(label="🏷️ Gérer les tags", command=lambda: self.manage_transaction_tags(row_id))
             
             # Display the menu
             menu.post(event.x_root, event.y_root)
@@ -1238,6 +1277,115 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         # Refresh display
         self.refresh_transactions()
     
+    def edit_transaction_notes(self, row_id):
+        """Edit notes for a transaction"""
+        # Get transaction index
+        transaction_index = self.transactions_tree.index(row_id)
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
+        
+        if transaction_index >= len(transactions):
+            return
+        
+        transaction = transactions[transaction_index]
+        current_notes = self.db.get_transaction_notes(transaction.id)
+        
+        # Create edit dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Notes - {transaction.description[:50]}")
+        dialog.geometry("500x300")
+        
+        ttk.Label(dialog, text="Notes de transaction:").pack(padx=10, pady=10)
+        
+        text_widget = tk.Text(dialog, height=10, width=60, wrap=tk.WORD)
+        text_widget.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
+        text_widget.insert("1.0", current_notes)
+        
+        def save():
+            notes = text_widget.get("1.0", tk.END).strip()
+            self.db.update_transaction_notes(transaction.id, notes)
+            messagebox.showinfo("Succès", "Notes mises à jour")
+            dialog.destroy()
+            self.refresh_transactions()
+        
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="✅ Sauvegarder", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="❌ Annuler", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+    
+    def manage_transaction_tags(self, row_id):
+        """Manage tags for a transaction"""
+        # Get transaction index
+        transaction_index = self.transactions_tree.index(row_id)
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
+        
+        if transaction_index >= len(transactions):
+            return
+        
+        transaction = transactions[transaction_index]
+        current_tags = self.db.get_transaction_tags(transaction.id)
+        current_tag_ids = {tag[0] for tag in current_tags}
+        all_tags = self.db.get_all_tags()
+        
+        # Create dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Tags - {transaction.description[:50]}")
+        dialog.geometry("400x300")
+        
+        ttk.Label(dialog, text="Sélectionnez les tags:").pack(padx=10, pady=10)
+        
+        # Create frame for checkboxes
+        frame = ttk.Frame(dialog)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Create canvas for scrolling
+        canvas = tk.Canvas(frame, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        scrollable = ttk.Frame(canvas)
+        
+        scrollable.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        
+        canvas.create_window((0, 0), window=scrollable, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        tag_vars = {}
+        for tag_id, tag_name, tag_color in all_tags:
+            var = tk.BooleanVar(value=tag_id in current_tag_ids)
+            tag_vars[tag_id] = var
+            ttk.Checkbutton(scrollable, text=tag_name, variable=var).pack(anchor=tk.W, pady=2)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        def save_tags():
+            # Remove all existing tags
+            for tag_id, _ in [(t[0], t[1]) for t in current_tags]:
+                self.db.remove_tag_from_transaction(transaction.id, tag_id)
+            
+            # Add selected tags
+            for tag_id, var in tag_vars.items():
+                if var.get():
+                    self.db.tag_transaction(transaction.id, tag_id)
+            
+            messagebox.showinfo("Succès", "Tags mis à jour")
+            dialog.destroy()
+            self.refresh_transactions()
+        
+        button_frame = ttk.Frame(dialog)
+        button_frame.pack(pady=10)
+        ttk.Button(button_frame, text="✅ Sauvegarder", command=save_tags).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="➕ Nouveau Tag", command=lambda: self.create_new_tag(tag_vars)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="❌ Annuler", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+    
+    def create_new_tag(self, tag_vars):
+        """Create a new tag"""
+        new_tag = simpledialog.askstring("Nouveau Tag", "Nom du tag:")
+        if new_tag:
+            tag_id = self.db.add_tag(new_tag)
+            tag_vars[tag_id] = tk.BooleanVar(value=True)
+            messagebox.showinfo("Succès", f"Tag '{new_tag}' créé")
+    
     
     def setup_report_tab(self):
         """Setup the report tab with comprehensive statistics and charts"""
@@ -1295,6 +1443,14 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
                            font=("Arial", 12, "bold"),
                            padx=30, pady=10, cursor="hand2")
         gen_btn.pack(pady=10)
+        
+        # Export PDF button
+        export_btn = tk.Button(frame, text="📄 Exporter en PDF", 
+                              command=self.export_report_pdf,
+                              bg=self.COLORS['success'], fg=self.COLORS['light'],
+                              font=("Arial", 12, "bold"),
+                              padx=30, pady=10, cursor="hand2")
+        export_btn.pack(pady=5)
         
         # Create main container with scrollbar
         container = ttk.Frame(frame)

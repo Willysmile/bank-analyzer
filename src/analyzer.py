@@ -724,4 +724,136 @@ class Analyzer:
             })
         
         return sorted(forecast, key=lambda x: x['amount'], reverse=True)
+    
+    def export_monthly_report(self, output_path: str, start_date: str = None, end_date: str = None) -> bool:
+        """Export monthly report to PDF"""
+        try:
+            from reportlab.lib.pagesizes import letter, A4
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+            from reportlab.lib.units import inch
+            from datetime import datetime
+            
+            # Get data
+            if start_date and end_date:
+                transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+            else:
+                transactions = self.db.get_all_transactions()
+            
+            stats = self.get_statistics(start_date, end_date)
+            monthly_stats = self.get_monthly_statistics()
+            
+            # Create PDF
+            doc = SimpleDocTemplate(output_path, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+            elements = []
+            
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=colors.HexColor('#2C3E50'),
+                spaceAfter=30,
+                alignment=1  # Center
+            )
+            
+            # Title
+            title = Paragraph("📊 Rapport Financier Mensuel", title_style)
+            elements.append(title)
+            elements.append(Spacer(1, 0.2*inch))
+            
+            # Summary section
+            summary_data = [
+                ["Métrique", "Valeur"],
+                ["Revenus", f"€{stats['total_income']:.2f}"],
+                ["Dépenses", f"€{stats['total_expenses']:.2f}"],
+                ["Bilan Net", f"€{stats['net']:.2f}"],
+                ["Transactions", str(stats['total_transactions'])],
+            ]
+            
+            summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
+            summary_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498DB')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#ECF0F1')]),
+            ]))
+            elements.append(summary_table)
+            elements.append(Spacer(1, 0.3*inch))
+            
+            # Monthly comparison
+            subtitle = Paragraph("Comparaison Mensuelle", styles['Heading2'])
+            elements.append(subtitle)
+            elements.append(Spacer(1, 0.1*inch))
+            
+            monthly_data = [["Mois", "Revenus", "Dépenses", "Bilan", "Ratio"]]
+            for month, data in list(monthly_stats.items())[-6:]:  # Last 6 months
+                monthly_data.append([
+                    month,
+                    f"€{data['income']:.0f}",
+                    f"€{data['expenses']:.0f}",
+                    f"€{data['net']:.0f}",
+                    f"{data['ratio']:.1f}%"
+                ])
+            
+            monthly_table = Table(monthly_data, colWidths=[1.5*inch, 1.2*inch, 1.2*inch, 1.2*inch, 1*inch])
+            monthly_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27AE60')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#ECF0F1')]),
+            ]))
+            elements.append(monthly_table)
+            elements.append(Spacer(1, 0.3*inch))
+            
+            # Category breakdown
+            subtitle = Paragraph("Top 10 Catégories", styles['Heading2'])
+            elements.append(subtitle)
+            elements.append(Spacer(1, 0.1*inch))
+            
+            category_dict = defaultdict(float)
+            for trans in transactions:
+                if trans.amount < 0:
+                    category_dict[trans.category] += abs(trans.amount)
+            
+            cat_data = [["Catégorie", "Total", "%"]]
+            total_expenses = sum(category_dict.values())
+            for cat, amount in sorted(category_dict.items(), key=lambda x: x[1], reverse=True)[:10]:
+                percentage = (amount / total_expenses * 100) if total_expenses > 0 else 0
+                cat_data.append([cat, f"€{amount:.2f}", f"{percentage:.1f}%"])
+            
+            cat_table = Table(cat_data, colWidths=[3*inch, 1.5*inch, 1*inch])
+            cat_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E74C3C')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#ECF0F1')]),
+            ]))
+            elements.append(cat_table)
+            
+            # Footer
+            elements.append(Spacer(1, 0.2*inch))
+            footer_text = f"Rapport généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}"
+            elements.append(Paragraph(footer_text, styles['Normal']))
+            
+            # Build PDF
+            doc.build(elements)
+            return True
+        
+        except ImportError:
+            print("❌ reportlab not installed. Run: pip install reportlab")
+            return False
+        except Exception as e:
+            print(f"❌ Error generating PDF: {e}")
+            return False
 
