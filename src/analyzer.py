@@ -99,9 +99,17 @@ class Analyzer:
         
         return dict(sorted(daily.items()))
     
-    def get_recurrence_statistics(self) -> Dict:
-        """Get statistics about recurring transactions"""
-        transactions = self.db.get_all_transactions()
+    def get_recurrence_statistics(self, start_date: str = None, end_date: str = None) -> Dict:
+        """Get statistics about recurring transactions
+        
+        Args:
+            start_date: Filter from this date (format: YYYY-MM-DD)
+            end_date: Filter to this date (format: YYYY-MM-DD)
+        """
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
         
         recurring = [t for t in transactions if t.recurrence]
         non_recurring = [t for t in transactions if not t.recurrence]
@@ -123,9 +131,17 @@ class Analyzer:
             'non_recurring_net': round(non_recurring_income - non_recurring_expenses, 2),
         }
     
-    def get_vital_statistics(self) -> Dict:
-        """Get statistics about vital transactions"""
-        transactions = self.db.get_all_transactions()
+    def get_vital_statistics(self, start_date: str = None, end_date: str = None) -> Dict:
+        """Get statistics about vital transactions
+        
+        Args:
+            start_date: Filter from this date (format: YYYY-MM-DD)
+            end_date: Filter to this date (format: YYYY-MM-DD)
+        """
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
         
         vital = [t for t in transactions if t.vital]
         non_vital = [t for t in transactions if not t.vital]
