@@ -62,6 +62,7 @@ class BankAnalyzerGUI:
         self.analysis_tab = ttk.Frame(self.notebook)
         self.report_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
+        self.budget_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.dashboard_tab, text="📊 Tableau de Bord")
         self.notebook.add(self.import_tab, text="📥 Import")
@@ -69,6 +70,7 @@ class BankAnalyzerGUI:
         self.notebook.add(self.analysis_tab, text="📈 Analyses")
         self.notebook.add(self.categories_tab, text="📂 Catégories")
         self.notebook.add(self.report_tab, text="� Rapports")
+        self.notebook.add(self.budget_tab, text="💰 Budget")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
         
         # Setup each tab
@@ -78,6 +80,7 @@ class BankAnalyzerGUI:
         self.setup_transactions_tab()
         self.setup_categories_tab()
         self.setup_report_tab()
+        self.setup_budget_tab()
         self.setup_settings_tab()
         
         # Create status bar
@@ -403,6 +406,257 @@ class BankAnalyzerGUI:
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur lors du calcul des analyses:\n{str(e)}")
             self.update_status("Erreur")
+    
+    def setup_budget_tab(self):
+        """Setup budget objectives tracking tab"""
+        frame = ttk.Frame(self.budget_tab, padding=15)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title = ttk.Label(frame, text="💰 Gestion des Objectifs Budgétaires", style='Title.TLabel')
+        title.pack(pady=15)
+        
+        # Button frame for actions
+        button_frame = ttk.Frame(frame)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        add_btn = tk.Button(button_frame, text="➕ Ajouter un Objectif",
+                           command=self.add_budget_objective,
+                           bg=self.COLORS['success'], fg=self.COLORS['light'],
+                           font=("Arial", 10, "bold"),
+                           padx=15, pady=8, cursor="hand2")
+        add_btn.pack(side=tk.LEFT, padx=5)
+        
+        refresh_btn = tk.Button(button_frame, text="🔄 Actualiser",
+                               command=self.refresh_budget_tab,
+                               bg=self.COLORS['secondary'], fg=self.COLORS['light'],
+                               font=("Arial", 10, "bold"),
+                               padx=15, pady=8, cursor="hand2")
+        refresh_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Budget status frame
+        status_frame = ttk.LabelFrame(frame, text="📊 Statut Budgétaire du Mois", padding=10)
+        status_frame.pack(fill=tk.X, pady=10)
+        
+        self.budget_status_label = ttk.Label(status_frame, text="", font=("Courier", 10), justify=tk.LEFT)
+        self.budget_status_label.pack(anchor=tk.W)
+        
+        # Budget objectives table
+        table_frame = ttk.LabelFrame(frame, text="📋 Objectifs Budgétaires", padding=10)
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Treeview
+        columns = ("Catégorie", "Limite", "Dépensé", "Restant", "Progression", "Statut")
+        self.budget_tree = ttk.Treeview(table_frame, columns=columns, height=15, show="headings")
+        
+        self.budget_tree.column("Catégorie", anchor=tk.W, width=120)
+        self.budget_tree.column("Limite", anchor=tk.E, width=80)
+        self.budget_tree.column("Dépensé", anchor=tk.E, width=80)
+        self.budget_tree.column("Restant", anchor=tk.E, width=80)
+        self.budget_tree.column("Progression", anchor=tk.CENTER, width=100)
+        self.budget_tree.column("Statut", anchor=tk.CENTER, width=80)
+        
+        self.budget_tree.heading("Catégorie", text="📂 Catégorie")
+        self.budget_tree.heading("Limite", text="💰 Limite")
+        self.budget_tree.heading("Dépensé", text="💸 Dépensé")
+        self.budget_tree.heading("Restant", text="📈 Restant")
+        self.budget_tree.heading("Progression", text="📊 Progression")
+        self.budget_tree.heading("Statut", text="🎯 Statut")
+        
+        # Scrollbars
+        vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.budget_tree.yview)
+        hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.budget_tree.xview)
+        self.budget_tree.configure(yscroll=vsb.set, xscroll=hsb.set)
+        
+        self.budget_tree.grid(row=0, column=0, sticky=tk.NSEW)
+        vsb.grid(row=0, column=1, sticky=tk.NS)
+        hsb.grid(row=1, column=0, sticky=tk.EW)
+        
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
+        
+        # Right-click menu
+        self.budget_tree.bind("<Button-3>", self.show_budget_context_menu)
+        
+        # Initial refresh
+        self.refresh_budget_tab()
+    
+    def refresh_budget_tab(self):
+        """Refresh budget tab"""
+        # Clear tree
+        for item in self.budget_tree.get_children():
+            self.budget_tree.delete(item)
+        
+        try:
+            # Get budget status
+            budget_status = self.analyzer.check_budget_status()
+            
+            # Update status label
+            status_text = f"""Mois: {budget_status['month']}
+Budget Total: €{budget_status['total_budget']:.2f} | Dépensé: €{budget_status['total_spent']:.2f} | Restant: €{budget_status['total_remaining']:.2f}
+Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
+"""
+            self.budget_status_label.config(text=status_text)
+            
+            # Add objectives to tree
+            for obj in budget_status['objectives']:
+                progress_bar = "█" * int(obj['percentage'] // 10) + "░" * (10 - int(obj['percentage'] // 10))
+                progress_text = f"{progress_bar} {obj['percentage']:.0f}%"
+                
+                tag = ""
+                if obj['status'] == 'dépassé':
+                    tag = "alert_red"
+                elif obj['status'] == 'attention':
+                    tag = "alert_yellow"
+                else:
+                    tag = "ok"
+                
+                self.budget_tree.insert(
+                    "",
+                    "end",
+                    values=(obj['category'], f"€{obj['limit']:.2f}", f"€{obj['spent']:.2f}",
+                           f"€{obj['remaining']:.2f}", progress_text, obj['status']),
+                    tags=(tag,)
+                )
+            
+            # Configure tags
+            self.budget_tree.tag_configure("ok", foreground="#27AE60")
+            self.budget_tree.tag_configure("alert_yellow", foreground="#F39C12")
+            self.budget_tree.tag_configure("alert_red", foreground="#E74C3C")
+            
+            self.update_status("Budget actualisé")
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du calcul du budget:\n{str(e)}")
+            self.update_status("Erreur")
+    
+    def add_budget_objective(self):
+        """Add a new budget objective"""
+        # Get all categories
+        all_categories = self.categorizer.get_all_categories_with_parent()
+        categories = [c['name'] for c in all_categories if c['parent_id'] is not None]  # Only subcategories
+        
+        if not categories:
+            messagebox.showwarning("Attention", "Aucune catégorie disponible")
+            return
+        
+        # Create dialog window
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Ajouter un Objectif Budgétaire")
+        dialog.geometry("400x150")
+        dialog.resizable(False, False)
+        
+        # Category selection
+        ttk.Label(dialog, text="Catégorie:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=10)
+        category_var = tk.StringVar(value=categories[0] if categories else "")
+        category_combo = ttk.Combobox(dialog, textvariable=category_var, values=categories, state="readonly", width=30)
+        category_combo.grid(row=0, column=1, sticky=tk.EW, padx=10, pady=10)
+        
+        # Limit amount
+        ttk.Label(dialog, text="Limite (€):").grid(row=1, column=0, sticky=tk.W, padx=10, pady=10)
+        limit_var = tk.StringVar(value="100")
+        limit_entry = ttk.Entry(dialog, textvariable=limit_var, width=30)
+        limit_entry.grid(row=1, column=1, sticky=tk.EW, padx=10, pady=10)
+        
+        # Buttons
+        def save():
+            try:
+                category = category_var.get()
+                limit = float(limit_var.get())
+                if limit <= 0:
+                    messagebox.showerror("Erreur", "La limite doit être positive")
+                    return
+                
+                self.db.add_budget_objective(category, limit)
+                messagebox.showinfo("Succès", f"Objectif ajouté pour {category}: €{limit:.2f}")
+                self.refresh_budget_tab()
+                dialog.destroy()
+            except ValueError:
+                messagebox.showerror("Erreur", "Veuillez entrer une valeur numérique valide")
+        
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=20)
+        
+        ttk.Button(btn_frame, text="✅ Ajouter", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="❌ Annuler", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        
+        dialog.columnconfigure(1, weight=1)
+    
+    def show_budget_context_menu(self, event):
+        """Show context menu on right-click in budget tree"""
+        row_id = self.budget_tree.identify_row(event.y)
+        if row_id:
+            self.budget_tree.selection_set(row_id)
+            
+            menu = tk.Menu(self.root, tearoff=0)
+            menu.add_command(label="✏️ Modifier la limite", command=lambda: self.edit_budget_objective(row_id))
+            menu.add_command(label="🗑️ Supprimer", command=lambda: self.delete_budget_objective(row_id))
+            
+            menu.post(event.x_root, event.y_root)
+    
+    def edit_budget_objective(self, row_id):
+        """Edit a budget objective"""
+        # Get item values
+        values = self.budget_tree.item(row_id, 'values')
+        category = values[0]
+        current_limit = float(values[1].replace('€', '').strip())
+        
+        # Get objectives to find ID
+        objectives = self.db.get_budget_objectives()
+        obj_id = None
+        for oid, cat, _ in objectives:
+            if cat == category:
+                obj_id = oid
+                break
+        
+        if not obj_id:
+            return
+        
+        # Create dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Modifier - {category}")
+        dialog.geometry("350x120")
+        dialog.resizable(False, False)
+        
+        ttk.Label(dialog, text="Nouvelle limite (€):").grid(row=0, column=0, sticky=tk.W, padx=10, pady=10)
+        limit_var = tk.StringVar(value=str(current_limit))
+        limit_entry = ttk.Entry(dialog, textvariable=limit_var, width=25)
+        limit_entry.grid(row=0, column=1, sticky=tk.EW, padx=10, pady=10)
+        
+        def save():
+            try:
+                new_limit = float(limit_var.get())
+                if new_limit <= 0:
+                    messagebox.showerror("Erreur", "La limite doit être positive")
+                    return
+                
+                self.db.update_budget_objective(obj_id, new_limit)
+                messagebox.showinfo("Succès", f"Limite mise à jour: €{new_limit:.2f}")
+                self.refresh_budget_tab()
+                dialog.destroy()
+            except ValueError:
+                messagebox.showerror("Erreur", "Veuillez entrer une valeur numérique valide")
+        
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.grid(row=1, column=0, columnspan=2, pady=15)
+        ttk.Button(btn_frame, text="✅ Sauvegarder", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="❌ Annuler", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        
+        dialog.columnconfigure(1, weight=1)
+    
+    def delete_budget_objective(self, row_id):
+        """Delete a budget objective"""
+        values = self.budget_tree.item(row_id, 'values')
+        category = values[0]
+        
+        if messagebox.askyesno("Confirmation", f"Supprimer l'objectif pour '{category}' ?"):
+            objectives = self.db.get_budget_objectives()
+            for oid, cat, _ in objectives:
+                if cat == category:
+                    self.db.delete_budget_objective(oid)
+                    self.refresh_budget_tab()
+                    messagebox.showinfo("Succès", "Objectif supprimé")
+                    break
     
     def create_status_bar(self):
         """Create a status bar at the bottom"""
