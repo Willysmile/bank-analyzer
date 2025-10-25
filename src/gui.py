@@ -59,12 +59,14 @@ class BankAnalyzerGUI:
         self.import_tab = ttk.Frame(self.notebook)
         self.transactions_tab = ttk.Frame(self.notebook)
         self.categories_tab = ttk.Frame(self.notebook)
+        self.analysis_tab = ttk.Frame(self.notebook)
         self.report_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.dashboard_tab, text="📊 Tableau de Bord")
         self.notebook.add(self.import_tab, text="📥 Import")
         self.notebook.add(self.transactions_tab, text="📋 Transactions")
+        self.notebook.add(self.analysis_tab, text="📈 Analyses")
         self.notebook.add(self.categories_tab, text="📂 Catégories")
         self.notebook.add(self.report_tab, text="� Rapports")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
@@ -72,6 +74,7 @@ class BankAnalyzerGUI:
         # Setup each tab
         self.setup_dashboard_tab()
         self.setup_import_tab()
+        self.setup_analysis_tab()
         self.setup_transactions_tab()
         self.setup_categories_tab()
         self.setup_report_tab()
@@ -281,6 +284,125 @@ class BankAnalyzerGUI:
         
         ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0))
         ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10)
+    
+    def setup_analysis_tab(self):
+        """Setup the analysis tab for detailed monthly and savings analysis"""
+        frame = ttk.Frame(self.analysis_tab, padding=15)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title = ttk.Label(frame, text="📈 Analyses Détaillées", style='Title.TLabel')
+        title.pack(pady=15)
+        
+        # Main container with scrollbar
+        container = ttk.Frame(frame)
+        container.pack(fill=tk.BOTH, expand=True)
+        
+        canvas = tk.Canvas(container, bg='#f8f9fa')
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        self.analysis_frame = ttk.Frame(canvas)
+        
+        self.analysis_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=self.analysis_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Refresh button
+        refresh_btn = tk.Button(frame, text="🔄 Actualiser les Analyses",
+                               command=self.refresh_analysis,
+                               bg=self.COLORS['secondary'], fg=self.COLORS['light'],
+                               font=("Arial", 11, "bold"),
+                               padx=20, pady=8, cursor="hand2")
+        refresh_btn.pack(pady=10, after=title)
+        
+        # Initial refresh
+        self.refresh_analysis()
+    
+    def refresh_analysis(self):
+        """Refresh analysis tab with detailed reports"""
+        # Clear previous content
+        for widget in self.analysis_frame.winfo_children():
+            widget.destroy()
+        
+        try:
+            monthly = self.analyzer.get_monthly_statistics()
+            savings = self.analyzer.get_savings_analysis()
+            
+            # 1. Monthly Comparison Table
+            monthly_frame = ttk.LabelFrame(self.analysis_frame, text="📅 Historique Mensuel (12 derniers mois)", padding=15)
+            monthly_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            months_sorted = sorted(monthly.items(), reverse=True)[:12]
+            
+            table_text = "Mois      | Revenus   | Dépenses  | Bilan    | Ratio | Statut\n"
+            table_text += "─" * 70 + "\n"
+            
+            for month_key, stats in months_sorted:
+                health = "✅" if stats['net'] >= 0 else "❌"
+                expense_ratio = f"{stats['ratio']:.2f}" if stats['ratio'] >= 0 else "N/A"
+                table_text += f"{month_key} │ €{stats['income']:7.2f} │ €{stats['expenses']:7.2f} │ €{stats['net']:7.2f} │ {expense_ratio} │ {health}\n"
+            
+            ttk.Label(monthly_frame, text=table_text, font=("Courier", 9), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            # 2. Monthly Statistics
+            if months_sorted:
+                first_6 = [s for _, s in months_sorted[:6]]
+                avg_income = sum(s['income'] for s in first_6) / len(first_6) if first_6 else 0
+                avg_expenses = sum(s['expenses'] for s in first_6) / len(first_6) if first_6 else 0
+                avg_net = avg_income - avg_expenses
+                
+                stats_frame = ttk.LabelFrame(self.analysis_frame, text="📊 Moyenne des 6 derniers mois", padding=15)
+                stats_frame.pack(fill=tk.X, padx=10, pady=10)
+                
+                stats_text = f"""
+💰 Revenus moyens: €{avg_income:.2f}
+💸 Dépenses moyennes: €{avg_expenses:.2f}
+📈 Bilan moyen: €{avg_net:.2f}
+📊 Ratio dépenses/revenus: {(avg_expenses/avg_income*100):.1f}%
+"""
+                ttk.Label(stats_frame, text=stats_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            # 3. Savings Detailed Analysis
+            savings_frame = ttk.LabelFrame(self.analysis_frame, text="💾 Analyse Détaillée Épargne/Externe", padding=15)
+            savings_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            savings_text = f"""
+╔ BILAN GLOBAL
+│
+├─ Bilan Externe: €{savings['external_balance']:.2f}
+│  ├─ Revenus: €{savings['external_income']:.2f}
+│  ├─ Dépenses: €{savings['external_expenses']:.2f}
+│
+├─ Bilan Épargne: €{savings['savings_balance']:.2f}
+│  ├─ Revenus: €{savings['savings_income']:.2f}
+│  ├─ Dépenses: €{savings['savings_expenses']:.2f}
+│
+├─ Utilisation Épargne: {savings['savings_usage_ratio']:.1f}%
+│
+└─ Transactions:
+   ├─ Externes: {savings['external_transactions']}
+   └─ De l'épargne: {savings['savings_transactions']}
+"""
+            ttk.Label(savings_frame, text=savings_text, font=("Courier", 9), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            # 4. Trend Analysis
+            trend_chart = self.analyzer.get_monthly_trend_chart()
+            if trend_chart:
+                chart_frame = ttk.LabelFrame(self.analysis_frame, text="📈 Tendance du Bilan Net", padding=10)
+                chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                self.add_chart_to_frame(chart_frame, trend_chart, "")
+            
+            self.update_status("Analyses actualisées")
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors du calcul des analyses:\n{str(e)}")
+            self.update_status("Erreur")
     
     def create_status_bar(self):
         """Create a status bar at the bottom"""
