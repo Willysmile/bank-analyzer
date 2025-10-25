@@ -19,6 +19,7 @@ class Transaction:
     name: Optional[str] = None  # Nom du bénéficiaire/prestataire
     recurrence: bool = False  # Transaction récurrente
     vital: bool = False  # Transaction vitale
+    savings: bool = False  # From savings (True) or external source (False)
     id: Optional[int] = None
     created_at: Optional[str] = None
 
@@ -51,6 +52,7 @@ class Database:
                 name TEXT,
                 recurrence INTEGER DEFAULT 0,
                 vital INTEGER DEFAULT 0,
+                savings INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -85,11 +87,11 @@ class Database:
     def insert_transaction(self, transaction: Transaction) -> int:
         """Insert a transaction into the database"""
         self.cursor.execute("""
-            INSERT INTO transactions (date, description, amount, category, type, name, recurrence, vital)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (date, description, amount, category, type, name, recurrence, vital, savings)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (transaction.date, transaction.description, transaction.amount, 
               transaction.category, transaction.type, transaction.name,
-              int(transaction.recurrence), int(transaction.vital)))
+              int(transaction.recurrence), int(transaction.vital), int(transaction.savings)))
         
         self.connection.commit()
         return self.cursor.lastrowid
@@ -97,7 +99,7 @@ class Database:
     def get_all_transactions(self, limit: Optional[int] = None) -> List[Transaction]:
         """Get all transactions"""
         query = """
-            SELECT id, date, description, amount, category, type, name, recurrence, vital, created_at
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, savings, created_at
             FROM transactions
             ORDER BY date DESC
         """
@@ -119,14 +121,15 @@ class Database:
                 name=row[6],
                 recurrence=bool(row[7]),
                 vital=bool(row[8]),
-                created_at=row[9]
+                savings=bool(row[9]),
+                created_at=row[10]
             ))
         return results
     
     def get_transactions_by_date_range(self, start_date: str, end_date: str) -> List[Transaction]:
         """Get transactions within a date range"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, type, name, recurrence, vital, created_at
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, savings, created_at
             FROM transactions
             WHERE date >= ? AND date <= ?
             ORDER BY date DESC
@@ -144,14 +147,15 @@ class Database:
                 name=row[6],
                 recurrence=bool(row[7]),
                 vital=bool(row[8]),
-                created_at=row[9]
+                savings=bool(row[9]),
+                created_at=row[10]
             ))
         return results
     
     def get_transactions_by_category(self, category: str) -> List[Transaction]:
         """Get transactions by category"""
         self.cursor.execute("""
-            SELECT id, date, description, amount, category, type, name, recurrence, vital, created_at
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, savings, created_at
             FROM transactions
             WHERE category = ?
             ORDER BY date DESC
@@ -169,7 +173,8 @@ class Database:
                 name=row[6],
                 recurrence=bool(row[7]),
                 vital=bool(row[8]),
-                created_at=row[9]
+                savings=bool(row[9]),
+                created_at=row[10]
             ))
         return results
     
@@ -184,8 +189,8 @@ class Database:
         self.connection.commit()
         return self.cursor.rowcount > 0
     
-    def update_transaction_flags(self, transaction_id: int, recurrence: bool = None, vital: bool = None) -> bool:
-        """Update transaction recurrence and vital flags"""
+    def update_transaction_flags(self, transaction_id: int, recurrence: bool = None, vital: bool = None, savings: bool = None) -> bool:
+        """Update transaction recurrence, vital and savings flags"""
         updates = []
         params = []
         
@@ -196,6 +201,10 @@ class Database:
         if vital is not None:
             updates.append("vital = ?")
             params.append(int(vital))
+        
+        if savings is not None:
+            updates.append("savings = ?")
+            params.append(int(savings))
         
         if not updates:
             return False

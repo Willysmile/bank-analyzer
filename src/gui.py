@@ -295,7 +295,7 @@ class BankAnalyzerGUI:
         table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Treeview for transactions
-        columns = ("Date", "Type", "Nom", "Montant", "Catégorie", "Sous-catégorie", "Récurrence", "Vital")
+        columns = ("Date", "Type", "Nom", "Montant", "Catégorie", "Sous-catégorie", "Récurrence", "Vital", "Épargne")
         self.transactions_tree = ttk.Treeview(table_frame, columns=columns, height=20, show="headings")
         
         # Define column headings
@@ -307,6 +307,7 @@ class BankAnalyzerGUI:
         self.transactions_tree.column("Sous-catégorie", anchor=tk.W, width=90)
         self.transactions_tree.column("Récurrence", anchor=tk.CENTER, width=80)
         self.transactions_tree.column("Vital", anchor=tk.CENTER, width=60)
+        self.transactions_tree.column("Épargne", anchor=tk.CENTER, width=70)
         
         self.transactions_tree.heading("Date", text="📅 Date", anchor=tk.W)
         self.transactions_tree.heading("Type", text="🔹 Type", anchor=tk.W)
@@ -316,6 +317,7 @@ class BankAnalyzerGUI:
         self.transactions_tree.heading("Sous-catégorie", text="🏷️ Sous-cat.", anchor=tk.W)
         self.transactions_tree.heading("Récurrence", text="🔄 Récurrence", anchor=tk.CENTER)
         self.transactions_tree.heading("Vital", text="⭐ Vital", anchor=tk.CENTER)
+        self.transactions_tree.heading("Épargne", text="💾 Épargne", anchor=tk.CENTER)
         
         # Scrollbars
         vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.transactions_tree.yview)
@@ -373,15 +375,16 @@ class BankAnalyzerGUI:
             else:
                 main_category = t.category or "-"
             
-            # Format recurrence and vital
+            # Format recurrence, vital and savings
             recurrence_text = "✓" if t.recurrence else ""
             vital_text = "✓" if t.vital else ""
+            savings_text = "💾" if t.savings else ""
             
             self.transactions_tree.insert(
                 "",
                 "end",
                 values=(t.date, t.type or "-", t.name or "-", amount_str, main_category, 
-                       subcategory or "-", recurrence_text, vital_text),
+                       subcategory or "-", recurrence_text, vital_text, savings_text),
                 tags=(tag,)
             )
         
@@ -402,6 +405,7 @@ class BankAnalyzerGUI:
             menu.add_separator()
             menu.add_command(label="🔄 Marquer comme récurrente", command=lambda: self.toggle_recurrence(row_id))
             menu.add_command(label="⭐ Marquer comme vitale", command=lambda: self.toggle_vital(row_id))
+            menu.add_command(label="💾 Marquer comme épargne", command=lambda: self.toggle_savings(row_id))
             
             # Display the menu
             menu.post(event.x_root, event.y_root)
@@ -514,6 +518,27 @@ class BankAnalyzerGUI:
         
         # Update database
         self.db.update_transaction_flags(transaction.id, vital=new_value)
+        
+        # Refresh display
+        self.refresh_transactions()
+    
+    def toggle_savings(self, row_id):
+        """Toggle savings flag for transaction"""
+        # Get transaction index from treeview
+        transaction_index = self.transactions_tree.index(row_id)
+        
+        # Get all transactions to find the transaction
+        limit = self.limit_var.get()
+        transactions = self.db.get_all_transactions(limit=limit)
+        
+        if transaction_index >= len(transactions):
+            return
+        
+        transaction = transactions[transaction_index]
+        new_value = not transaction.savings
+        
+        # Update database
+        self.db.update_transaction_flags(transaction.id, savings=new_value)
         
         # Refresh display
         self.refresh_transactions()
