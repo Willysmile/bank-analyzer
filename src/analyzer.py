@@ -290,3 +290,164 @@ class Analyzer:
             'by_category': by_category,
             'charts': charts
         }
+    
+    def get_monthly_statistics(self) -> Dict[str, Dict]:
+        """Get statistics grouped by month"""
+        transactions = self.db.get_all_transactions()
+        monthly_stats = defaultdict(lambda: {
+            'income': 0.0,
+            'expenses': 0.0,
+            'count': 0,
+            'transactions': []
+        })
+        
+        for t in transactions:
+            # Extract YYYY-MM from date
+            month_key = t.date[:7] if len(t.date) >= 7 else t.date
+            
+            if t.amount > 0:
+                monthly_stats[month_key]['income'] += t.amount
+            else:
+                monthly_stats[month_key]['expenses'] += abs(t.amount)
+            
+            monthly_stats[month_key]['count'] += 1
+            monthly_stats[month_key]['transactions'].append(t)
+        
+        # Calculate net and ratio for each month
+        for month_key in monthly_stats:
+            stats = monthly_stats[month_key]
+            stats['net'] = stats['income'] - stats['expenses']
+            stats['income'] = round(stats['income'], 2)
+            stats['expenses'] = round(stats['expenses'], 2)
+            stats['net'] = round(stats['net'], 2)
+            stats['ratio'] = round(stats['expenses'] / stats['income'], 2) if stats['income'] > 0 else 0
+        
+        return dict(sorted(monthly_stats.items(), reverse=True))
+    
+    def get_dashboard_summary(self) -> Dict:
+        """Get dashboard summary with key metrics"""
+        transactions = self.db.get_all_transactions()
+        
+        if not transactions:
+            return {
+                'balance': 0.0,
+                'monthly_income': 0.0,
+                'monthly_expenses': 0.0,
+                'monthly_net': 0.0,
+                'savings_ratio': 0.0,
+                'transaction_count': 0,
+                'status': 'aucune_donnee',
+                'last_transaction': None,
+                'recurring_monthly': 0.0,
+                'external_vs_savings': {'external': 0.0, 'savings': 0.0}
+            }
+        
+        # Get current month
+        today = datetime.now()
+        current_month = today.strftime("%Y-%m")
+        
+        # Filter current month transactions
+        current_month_trans = [t for t in transactions if t.date.startswith(current_month)]
+        
+        # Calculate totals
+        total_income = sum(t.amount for t in transactions if t.amount > 0)
+        total_expenses = sum(abs(t.amount) for t in transactions if t.amount < 0)
+        balance = total_income - total_expenses
+        
+        # Monthly stats
+        month_income = sum(t.amount for t in current_month_trans if t.amount > 0)
+        month_expenses = sum(abs(t.amount) for t in current_month_trans if t.amount < 0)
+        month_net = month_income - month_expenses
+        
+        # Savings analysis
+        external_income = sum(t.amount for t in transactions if t.amount > 0 and not t.savings)
+        savings_income = sum(t.amount for t in transactions if t.amount > 0 and t.savings)
+        external_expenses = sum(abs(t.amount) for t in transactions if t.amount < 0 and not t.savings)
+        savings_expenses = sum(abs(t.amount) for t in transactions if t.amount < 0 and t.savings)
+        
+        # Recurring monthly charges
+        recurring = [t for t in transactions if t.recurrence]
+        recurring_monthly = sum(abs(t.amount) for t in recurring if t.amount < 0)
+        
+        # Determine status
+        if month_net < 0:
+            status = 'deficit'
+        elif month_expenses > month_income * 0.8:
+            status = 'warning'
+        else:
+            status = 'healthy'
+        
+        savings_ratio = (savings_income / external_income * 100) if external_income > 0 else 0
+        
+        return {
+            'balance': round(balance, 2),
+            'monthly_income': round(month_income, 2),
+            'monthly_expenses': round(month_expenses, 2),
+            'monthly_net': round(month_net, 2),
+            'savings_ratio': round(savings_ratio, 2),
+            'transaction_count': len(current_month_trans),
+            'status': status,
+            'last_transaction': transactions[0] if transactions else None,
+            'recurring_monthly': round(recurring_monthly, 2),
+            'external_vs_savings': {
+                'external': round(external_income - external_expenses, 2),
+                'savings': round(savings_income - savings_expenses, 2)
+            }
+        }
+    
+    def get_monthly_trend_chart(self) -> str:
+        """Generate monthly trend chart (line chart of net balance)"""
+        monthly = self.get_monthly_statistics()
+        
+        if not monthly:
+            return None
+        
+        months = sorted(monthly.keys())[-12:]  # Last 12 months
+        nets = [monthly[m]['net'] for m in months]
+        
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.plot(months, nets, marker='o', linewidth=2, markersize=8, color='#3498DB')
+        ax.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+        ax.fill_between(range(len(months)), nets, alpha=0.3, color='#3498DB')
+        
+        ax.set_title('Évolution du Bilan Net (Mensuel)', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Mois')
+        ax.set_ylabel('Bilan Net (€)')
+        ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        # Convert to base64
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=100)
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode()
+        plt.close()
+        
+        return img_base64
+    
+    def get_savings_analysis(self) -> Dict:
+        """Analyze impact of savings on finances"""
+        transactions = self.db.get_all_transactions()
+        
+        external = [t for t in transactions if not t.savings]
+        from_savings = [t for t in transactions if t.savings]
+        
+        external_income = sum(t.amount for t in external if t.amount > 0)
+        external_expenses = sum(abs(t.amount) for t in external if t.amount < 0)
+        
+        savings_income = sum(t.amount for t in from_savings if t.amount > 0)
+        savings_expenses = sum(abs(t.amount) for t in from_savings if t.amount < 0)
+        
+        return {
+            'external_balance': round(external_income - external_expenses, 2),
+            'savings_balance': round(savings_income - savings_expenses, 2),
+            'external_transactions': len(external),
+            'savings_transactions': len(from_savings),
+            'savings_usage_ratio': round((savings_expenses / (external_expenses + savings_expenses) * 100), 2) if (external_expenses + savings_expenses) > 0 else 0,
+            'external_income': round(external_income, 2),
+            'external_expenses': round(external_expenses, 2),
+            'savings_income': round(savings_income, 2),
+            'savings_expenses': round(savings_expenses, 2),
+        }
+

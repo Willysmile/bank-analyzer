@@ -55,19 +55,22 @@ class BankAnalyzerGUI:
         self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         # Create tabs
+        self.dashboard_tab = ttk.Frame(self.notebook)
         self.import_tab = ttk.Frame(self.notebook)
         self.transactions_tab = ttk.Frame(self.notebook)
         self.categories_tab = ttk.Frame(self.notebook)
         self.report_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
         
+        self.notebook.add(self.dashboard_tab, text="📊 Tableau de Bord")
         self.notebook.add(self.import_tab, text="📥 Import")
         self.notebook.add(self.transactions_tab, text="📋 Transactions")
         self.notebook.add(self.categories_tab, text="📂 Catégories")
-        self.notebook.add(self.report_tab, text="📊 Rapports")
+        self.notebook.add(self.report_tab, text="� Rapports")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
         
         # Setup each tab
+        self.setup_dashboard_tab()
         self.setup_import_tab()
         self.setup_transactions_tab()
         self.setup_categories_tab()
@@ -82,6 +85,7 @@ class BankAnalyzerGUI:
         self.refresh_transactions()
         self.refresh_categories_tree()
         self.refresh_rules_display()
+
     
     def setup_styles(self):
         """Configure ttk styles"""
@@ -137,6 +141,147 @@ class BankAnalyzerGUI:
         
         self.stats_label = stats_label  # Store reference for updates
     
+    def setup_dashboard_tab(self):
+        """Setup the dashboard tab with key metrics"""
+        frame = ttk.Frame(self.dashboard_tab, padding=15)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title = ttk.Label(frame, text="📊 Tableau de Bord Financier", style='Title.TLabel')
+        title.pack(pady=15)
+        
+        # Main container with scrollbar
+        container = ttk.Frame(frame)
+        container.pack(fill=tk.BOTH, expand=True)
+        
+        canvas = tk.Canvas(container, bg='#f8f9fa')
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        self.dashboard_frame = ttk.Frame(canvas)
+        
+        self.dashboard_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=self.dashboard_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Refresh button
+        refresh_btn = tk.Button(frame, text="🔄 Actualiser le Tableau de Bord",
+                               command=self.refresh_dashboard,
+                               bg=self.COLORS['secondary'], fg=self.COLORS['light'],
+                               font=("Arial", 11, "bold"),
+                               padx=20, pady=8, cursor="hand2")
+        refresh_btn.pack(pady=10, after=title)
+        
+        # Initial refresh
+        self.refresh_dashboard()
+    
+    def refresh_dashboard(self):
+        """Refresh dashboard with latest data"""
+        # Clear previous content
+        for widget in self.dashboard_frame.winfo_children():
+            widget.destroy()
+        
+        try:
+            # Get dashboard data
+            summary = self.analyzer.get_dashboard_summary()
+            monthly = self.analyzer.get_monthly_statistics()
+            savings = self.analyzer.get_savings_analysis()
+            
+            # 1. KPI Cards Section
+            kpi_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
+            kpi_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            # Grid of KPI cards
+            cards_grid = ttk.Frame(kpi_frame)
+            cards_grid.pack(fill=tk.X)
+            
+            # Card 1: Monthly Income
+            self.create_kpi_card(cards_grid, "💰 Revenus", f"€{summary['monthly_income']:.2f}", 
+                                "#27AE60", 0, 0)
+            
+            # Card 2: Monthly Expenses
+            self.create_kpi_card(cards_grid, "💸 Dépenses", f"€{summary['monthly_expenses']:.2f}",
+                                "#E74C3C", 0, 1)
+            
+            # Card 3: Monthly Net
+            net_color = "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C"
+            self.create_kpi_card(cards_grid, "📊 Bilan Net", f"€{summary['monthly_net']:.2f}",
+                                net_color, 0, 2)
+            
+            # Card 4: Status
+            status_emoji = "✅" if summary['status'] == 'healthy' else ("⚠️" if summary['status'] == 'warning' else "❌")
+            status_text = "Bon" if summary['status'] == 'healthy' else ("Attention" if summary['status'] == 'warning' else "Déficit")
+            status_color = "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C")
+            self.create_kpi_card(cards_grid, "🎯 Statut", f"{status_emoji} {status_text}",
+                                status_color, 1, 0)
+            
+            # Card 5: Recurring
+            self.create_kpi_card(cards_grid, "🔄 Récurrent/mois", f"€{summary['recurring_monthly']:.2f}",
+                                "#3498DB", 1, 1)
+            
+            # Card 6: Transactions
+            self.create_kpi_card(cards_grid, "📝 Transactions", f"{summary['transaction_count']}",
+                                "#9B59B6", 1, 2)
+            
+            # 2. Monthly Trend Chart
+            trend_chart = self.analyzer.get_monthly_trend_chart()
+            if trend_chart:
+                chart_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Tendance Mensuelle", padding=10)
+                chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+                self.add_chart_to_frame(chart_frame, trend_chart, "")
+            
+            # 3. Savings Analysis
+            savings_frame = ttk.LabelFrame(self.dashboard_frame, text="💾 Analyse Épargne", padding=15)
+            savings_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            savings_text = f"""
+📊 Bilan Externe: €{savings['external_balance']:.2f}
+💾 Bilan Épargne: €{savings['savings_balance']:.2f}
+
+💰 Revenus Externes: €{savings['external_income']:.2f}
+💰 Revenus Épargne: €{savings['savings_income']:.2f}
+
+💸 Dépenses Externes: €{savings['external_expenses']:.2f}
+💸 Dépenses Épargne: €{savings['savings_expenses']:.2f}
+
+📈 Utilisation de l'épargne: {savings['savings_usage_ratio']:.1f}%
+"""
+            ttk.Label(savings_frame, text=savings_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            # 4. Top 5 Months
+            if monthly:
+                months_frame = ttk.LabelFrame(self.dashboard_frame, text="📅 Derniers Mois", padding=15)
+                months_frame.pack(fill=tk.X, padx=10, pady=10)
+                
+                months_text = "Mois | Revenus | Dépenses | Bilan | Santé\n"
+                months_text += "─" * 55 + "\n"
+                
+                for i, (month, stats) in enumerate(list(monthly.items())[:6]):
+                    health = "✅" if stats['net'] >= 0 else "❌"
+                    months_text += f"{month} | €{stats['income']:7.2f} | €{stats['expenses']:7.2f} | €{stats['net']:7.2f} | {health}\n"
+                
+                ttk.Label(months_frame, text=months_text, font=("Courier", 9), justify=tk.LEFT).pack(anchor=tk.W)
+            
+            self.update_status("Tableau de bord actualisé")
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'actualisation du tableau de bord:\n{str(e)}")
+            self.update_status("Erreur")
+    
+    def create_kpi_card(self, parent, title, value, color, row, col):
+        """Create a KPI card widget"""
+        card = tk.Frame(parent, bg=color, height=100, width=150)
+        card.grid(row=row, column=col, padx=10, pady=10, sticky=tk.NSEW)
+        card.pack_propagate(False)
+        
+        ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0))
+        ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10)
+    
     def create_status_bar(self):
         """Create a status bar at the bottom"""
         status_bar = tk.Frame(self.root, bg=self.COLORS['primary'], height=25)
@@ -150,8 +295,9 @@ class BankAnalyzerGUI:
     
     def update_status(self, message):
         """Update status bar message"""
-        self.status_text.config(text=message)
-        self.root.update()
+        if hasattr(self, 'status_text'):
+            self.status_text.config(text=message)
+            self.root.update()
     
     def update_stats_display(self):
         """Update header stats"""
