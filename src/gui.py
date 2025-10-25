@@ -63,6 +63,7 @@ class BankAnalyzerGUI:
         self.report_tab = ttk.Frame(self.notebook)
         self.settings_tab = ttk.Frame(self.notebook)
         self.budget_tab = ttk.Frame(self.notebook)
+        self.statistics_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.dashboard_tab, text="📊 Tableau de Bord")
         self.notebook.add(self.import_tab, text="📥 Import")
@@ -71,6 +72,7 @@ class BankAnalyzerGUI:
         self.notebook.add(self.categories_tab, text="📂 Catégories")
         self.notebook.add(self.report_tab, text="� Rapports")
         self.notebook.add(self.budget_tab, text="💰 Budget")
+        self.notebook.add(self.statistics_tab, text="📊 Statistiques")
         self.notebook.add(self.settings_tab, text="⚙️ Paramètres")
         
         # Setup each tab
@@ -81,6 +83,7 @@ class BankAnalyzerGUI:
         self.setup_categories_tab()
         self.setup_report_tab()
         self.setup_budget_tab()
+        self.setup_statistics_tab()
         self.setup_settings_tab()
         
         # Create status bar
@@ -1642,6 +1645,245 @@ Règles: {len(self.categorizer.get_rules())}
                 messagebox.showinfo("Succès", f"✅ {deleted} transaction(s) dupliquée(s) supprimée(s)!")
             except Exception as e:
                 messagebox.showerror("Erreur", f"Erreur lors de la suppression des doublons: {str(e)}")
+    
+    def setup_statistics_tab(self):
+        """Setup advanced statistics tab"""
+        frame = ttk.Frame(self.statistics_tab, padding=15)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Title
+        title = ttk.Label(frame, text="📊 Statistiques Avancées", style='Title.TLabel')
+        title.pack(pady=15)
+        
+        # Filter frame
+        filter_frame = ttk.LabelFrame(frame, text="🔍 Filtres", padding=10)
+        filter_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(filter_frame, text="Plage de dates:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(filter_frame, text="De:").grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        self.stat_start_date = DateEntry(filter_frame, width=15, background='darkblue', foreground='white', borderwidth=2)
+        self.stat_start_date.grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Label(filter_frame, text="À:").grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
+        self.stat_end_date = DateEntry(filter_frame, width=15, background='darkblue', foreground='white', borderwidth=2)
+        self.stat_end_date.grid(row=0, column=4, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Label(filter_frame, text="Montant min (€):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        self.stat_min_amount = ttk.Entry(filter_frame, width=10)
+        self.stat_min_amount.insert(0, "0")
+        self.stat_min_amount.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Label(filter_frame, text="Montant max (€):").grid(row=1, column=3, sticky=tk.W, padx=5, pady=5)
+        self.stat_max_amount = ttk.Entry(filter_frame, width=10)
+        self.stat_max_amount.grid(row=1, column=4, sticky=tk.W, padx=5, pady=5)
+        
+        # Analysis options
+        ttk.Label(filter_frame, text="Analyse:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+        analysis_var = tk.StringVar(value="weekday")
+        analysis_combo = ttk.Combobox(filter_frame, textvariable=analysis_var, width=20,
+                                      values=["weekday", "merchants", "anomalies", "trends"], state="readonly")
+        analysis_combo.grid(row=2, column=1, columnspan=2, sticky=tk.W, padx=5, pady=5)
+        self.stat_analysis_var = analysis_var
+        
+        # Buttons
+        refresh_btn = tk.Button(filter_frame, text="🔄 Actualiser",
+                               command=self.refresh_statistics,
+                               bg=self.COLORS['secondary'], fg=self.COLORS['light'],
+                               font=("Arial", 10, "bold"), padx=15, pady=8, cursor="hand2")
+        refresh_btn.grid(row=2, column=3, columnspan=2, sticky=tk.EW, padx=5, pady=5)
+        
+        # Results frame
+        results_frame = ttk.Frame(frame)
+        results_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        # Canvas for scrollable content
+        canvas = tk.Canvas(results_frame, bg=self.COLORS['light'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(results_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.config(yscrollcommand=scrollbar.set)
+        
+        self.stat_results_frame = scrollable_frame
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+    
+    def refresh_statistics(self):
+        """Refresh statistics display"""
+        # Clear previous results
+        for widget in self.stat_results_frame.winfo_children():
+            widget.destroy()
+        
+        try:
+            analysis_type = self.stat_analysis_var.get()
+            start_date = self.stat_start_date.get_date().strftime("%Y-%m-%d")
+            end_date = self.stat_end_date.get_date().strftime("%Y-%m-%d")
+            
+            if analysis_type == "weekday":
+                self.show_weekday_analysis(start_date, end_date)
+            elif analysis_type == "merchants":
+                self.show_merchants_analysis(start_date, end_date)
+            elif analysis_type == "anomalies":
+                self.show_anomalies_analysis(start_date, end_date)
+            elif analysis_type == "trends":
+                self.show_trends_analysis()
+            
+            self.update_status("Statistiques actualisées")
+        
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'analyse: {str(e)}")
+    
+    def show_weekday_analysis(self, start_date, end_date):
+        """Display weekday analysis"""
+        title = ttk.Label(self.stat_results_frame, text="📅 Dépenses par Jour de la Semaine", 
+                         font=("Arial", 12, "bold"))
+        title.pack(pady=10)
+        
+        stats = self.analyzer.get_weekday_analysis(start_date, end_date)
+        
+        # Create table
+        table_frame = ttk.Frame(self.stat_results_frame)
+        table_frame.pack(fill=tk.BOTH, padx=10, pady=10)
+        
+        columns = ("Jour", "Transactions", "Revenus", "Dépenses", "Bilan", "Avg/Trans")
+        tree = ttk.Treeview(table_frame, columns=columns, height=10, show="headings")
+        
+        tree.column("Jour", anchor=tk.W, width=100)
+        tree.column("Transactions", anchor=tk.CENTER, width=80)
+        tree.column("Revenus", anchor=tk.E, width=80)
+        tree.column("Dépenses", anchor=tk.E, width=80)
+        tree.column("Bilan", anchor=tk.E, width=80)
+        tree.column("Avg/Trans", anchor=tk.E, width=90)
+        
+        for col in columns:
+            tree.heading(col, text=col)
+        
+        for day, data in stats.items():
+            avg = data['net'] / data['count'] if data['count'] > 0 else 0
+            tree.insert("", "end", values=(
+                day,
+                data['count'],
+                f"€{data['income']:.2f}",
+                f"€{data['expenses']:.2f}",
+                f"€{data['net']:.2f}",
+                f"€{avg:.2f}"
+            ))
+        
+        tree.pack(fill=tk.BOTH, expand=True)
+    
+    def show_merchants_analysis(self, start_date, end_date):
+        """Display top merchants analysis"""
+        title = ttk.Label(self.stat_results_frame, text="🏪 Top Marchands", 
+                         font=("Arial", 12, "bold"))
+        title.pack(pady=10)
+        
+        merchants = self.analyzer.get_top_merchants(limit=15, start_date=start_date, end_date=end_date)
+        
+        if not merchants:
+            ttk.Label(self.stat_results_frame, text="Aucune données disponibles").pack()
+            return
+        
+        # Create table
+        table_frame = ttk.Frame(self.stat_results_frame)
+        table_frame.pack(fill=tk.BOTH, padx=10, pady=10)
+        
+        columns = ("Marchand", "Transactions", "Total", "Moyenne")
+        tree = ttk.Treeview(table_frame, columns=columns, height=15, show="headings")
+        
+        tree.column("Marchand", anchor=tk.W, width=250)
+        tree.column("Transactions", anchor=tk.CENTER, width=80)
+        tree.column("Total", anchor=tk.E, width=100)
+        tree.column("Moyenne", anchor=tk.E, width=100)
+        
+        for col in columns:
+            tree.heading(col, text=col)
+        
+        for i, m in enumerate(merchants, 1):
+            tree.insert("", "end", values=(
+                f"{i}. {m['merchant'][:50]}",
+                m['count'],
+                f"€{m['total']:.2f}",
+                f"€{m['average']:.2f}"
+            ), tags=("oddrow" if i % 2 == 0 else "evenrow",))
+        
+        tree.tag_configure("oddrow", background="#ECF0F1")
+        tree.tag_configure("evenrow", background="#FFFFFF")
+        tree.pack(fill=tk.BOTH, expand=True)
+    
+    def show_anomalies_analysis(self, start_date, end_date):
+        """Display anomalies detection"""
+        title = ttk.Label(self.stat_results_frame, text="⚠️ Transactions Anormales", 
+                         font=("Arial", 12, "bold"))
+        title.pack(pady=10)
+        
+        anomalies = self.analyzer.detect_anomalies(start_date, end_date, threshold_std=2.0)
+        
+        if not anomalies['by_category']:
+            ttk.Label(self.stat_results_frame, text="✅ Aucune anomalie détectée").pack()
+            return
+        
+        # Summary
+        summary_text = f"🔍 Total anomalies détectées: {anomalies['total_anomalies']}"
+        ttk.Label(self.stat_results_frame, text=summary_text, font=("Arial", 10, "bold")).pack(pady=5)
+        
+        # By category
+        for category, data in anomalies['by_category'].items():
+            cat_frame = ttk.LabelFrame(self.stat_results_frame, text=f"📂 {category}", padding=10)
+            cat_frame.pack(fill=tk.X, padx=10, pady=5)
+            
+            stats_text = (f"Moyenne: €{data['mean']:.2f} | "
+                         f"Écart-type: €{data['std_dev']:.2f} | "
+                         f"Seuil: €{data['threshold']:.2f} | "
+                         f"Anomalies: {data['count']}")
+            ttk.Label(cat_frame, text=stats_text, font=("Courier", 9)).pack(anchor=tk.W)
+            
+            anom_text = f"Montants anormaux: {', '.join(f'€{a:.2f}' for a in data['anomalies'][:10])}"
+            ttk.Label(cat_frame, text=anom_text, font=("Courier", 9, "bold"), foreground="#E74C3C").pack(anchor=tk.W)
+    
+    def show_trends_analysis(self):
+        """Display category trends"""
+        title = ttk.Label(self.stat_results_frame, text="📈 Tendances des Catégories (6 mois)", 
+                         font=("Arial", 12, "bold"))
+        title.pack(pady=10)
+        
+        trends = self.analyzer.get_category_trends(months=6)
+        
+        # Create table
+        table_frame = ttk.Frame(self.stat_results_frame)
+        table_frame.pack(fill=tk.BOTH, padx=10, pady=10)
+        
+        columns = ["Catégorie"] + trends['months'] + ["Tendance", "Total", "Moyenne"]
+        tree = ttk.Treeview(table_frame, columns=columns, height=12, show="headings")
+        
+        tree.column("Catégorie", anchor=tk.W, width=120)
+        for month in trends['months']:
+            tree.column(month, anchor=tk.E, width=70)
+        tree.column("Tendance", anchor=tk.CENTER, width=70)
+        tree.column("Total", anchor=tk.E, width=80)
+        tree.column("Moyenne", anchor=tk.E, width=80)
+        
+        for col in columns:
+            tree.heading(col, text=col)
+        
+        for category, data in sorted(trends['categories'].items(), key=lambda x: x[1]['total'], reverse=True):
+            trend_icon = "📈" if data['trend'] == 'up' else "📉"
+            values = [category]
+            for v in data['values']:
+                values.append(f"€{v:.2f}")
+            values.extend([
+                f"{trend_icon} {data['trend']}",
+                f"€{data['total']:.2f}",
+                f"€{data['average']:.2f}"
+            ])
+            tree.insert("", "end", values=values)
+        
+        tree.pack(fill=tk.BOTH, expand=True)
 
 
 def main():

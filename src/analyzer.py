@@ -518,4 +518,172 @@ class Analyzer:
         budget_status['total_spent'] = round(budget_status['total_spent'], 2)
         
         return budget_status
+    
+    def get_weekday_analysis(self, start_date: str = None, end_date: str = None) -> Dict:
+        """Analyze spending by day of week"""
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
+        
+        days = {0: 'Lundi', 1: 'Mardi', 2: 'Mercredi', 3: 'Jeudi', 4: 'Vendredi', 5: 'Samedi', 6: 'Dimanche'}
+        weekday_stats = {day: {'count': 0, 'income': 0.0, 'expenses': 0.0, 'net': 0.0} for day in days.values()}
+        
+        for trans in transactions:
+            date_obj = datetime.strptime(trans.date, "%Y-%m-%d")
+            weekday_name = days[date_obj.weekday()]
+            
+            if trans.amount > 0:
+                weekday_stats[weekday_name]['income'] += trans.amount
+            else:
+                weekday_stats[weekday_name]['expenses'] += abs(trans.amount)
+            
+            weekday_stats[weekday_name]['net'] += trans.amount
+            weekday_stats[weekday_name]['count'] += 1
+        
+        return weekday_stats
+    
+    def get_top_merchants(self, limit: int = 10, start_date: str = None, end_date: str = None) -> List[Dict]:
+        """Get top merchants by transaction count and amount"""
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
+        
+        merchant_stats = defaultdict(lambda: {'count': 0, 'total': 0.0, 'transactions': []})
+        
+        for trans in transactions:
+            merchant = trans.description or "Non spécifié"
+            merchant_stats[merchant]['count'] += 1
+            merchant_stats[merchant]['total'] += abs(trans.amount)
+            merchant_stats[merchant]['transactions'].append({
+                'date': trans.date,
+                'amount': abs(trans.amount),
+                'category': trans.category
+            })
+        
+        # Sort by total amount
+        sorted_merchants = sorted(merchant_stats.items(), key=lambda x: x[1]['total'], reverse=True)[:limit]
+        
+        result = []
+        for merchant, stats in sorted_merchants:
+            result.append({
+                'merchant': merchant,
+                'count': stats['count'],
+                'total': round(stats['total'], 2),
+                'average': round(stats['total'] / stats['count'], 2)
+            })
+        
+        return result
+    
+    def get_transactions_by_amount_range(self, min_amount: float = 0, max_amount: float = None, 
+                                       start_date: str = None, end_date: str = None) -> List[Transaction]:
+        """Get transactions within a specific amount range"""
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
+        
+        filtered = []
+        for trans in transactions:
+            amount = abs(trans.amount)
+            if amount >= min_amount:
+                if max_amount is None or amount <= max_amount:
+                    filtered.append(trans)
+        
+        return sorted(filtered, key=lambda x: x.date, reverse=True)
+    
+    def detect_anomalies(self, start_date: str = None, end_date: str = None, threshold_std: float = 2.0) -> Dict:
+        """Detect anomalous transactions based on statistical analysis"""
+        if start_date and end_date:
+            transactions = self.db.get_transactions_by_date_range(start_date, end_date)
+        else:
+            transactions = self.db.get_all_transactions()
+        
+        # Group by category
+        category_groups = defaultdict(list)
+        for trans in transactions:
+            if trans.amount < 0:  # Only expenses
+                category_groups[trans.category].append(abs(trans.amount))
+        
+        anomalies = {
+            'by_category': {},
+            'unusual_times': [],
+            'total_anomalies': 0
+        }
+        
+        # Calculate mean and std dev for each category
+        for category, amounts in category_groups.items():
+            if len(amounts) < 3:  # Need at least 3 transactions
+                continue
+            
+            mean = sum(amounts) / len(amounts)
+            variance = sum((x - mean) ** 2 for x in amounts) / len(amounts)
+            std_dev = variance ** 0.5
+            
+            # Find anomalies (values > mean + threshold_std * std_dev)
+            threshold = mean + (threshold_std * std_dev)
+            anomalous = [a for a in amounts if a > threshold]
+            
+            if anomalous:
+                anomalies['by_category'][category] = {
+                    'count': len(anomalous),
+                    'mean': round(mean, 2),
+                    'std_dev': round(std_dev, 2),
+                    'threshold': round(threshold, 2),
+                    'anomalies': [round(a, 2) for a in anomalous]
+                }
+                anomalies['total_anomalies'] += len(anomalous)
+        
+        # Find unusual times (weekend spending, etc)
+        weekend_spending = defaultdict(float)
+        for trans in transactions:
+            if trans.amount < 0:
+                date_obj = datetime.strptime(trans.date, "%Y-%m-%d")
+                if date_obj.weekday() >= 5:  # Saturday=5, Sunday=6
+                    weekend_spending[trans.category] += abs(trans.amount)
+        
+        if weekend_spending:
+            anomalies['weekend_spending'] = {k: round(v, 2) for k, v in weekend_spending.items()}
+        
+        return anomalies
+    
+    def get_category_trends(self, months: int = 6) -> Dict:
+        """Get category spending trends over recent months"""
+        trends = defaultdict(lambda: [0] * months)
+        month_labels = []
+        
+        for i in range(months - 1, -1, -1):
+            month_date = datetime.now() - timedelta(days=30 * i)
+            start = month_date.replace(day=1)
+            if i == months - 1:
+                end = month_date
+            else:
+                end = (start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+            
+            month_str = start.strftime("%m/%Y")
+            month_labels.append(month_str)
+            
+            transactions = self.db.get_transactions_by_date_range(
+                start.strftime("%Y-%m-%d"),
+                end.strftime("%Y-%m-%d")
+            )
+            
+            for trans in transactions:
+                if trans.amount < 0:
+                    trends[trans.category][months - 1 - i] += abs(trans.amount)
+        
+        result = {}
+        for category, values in trends.items():
+            result[category] = {
+                'values': [round(v, 2) for v in values],
+                'trend': 'up' if values[-1] > values[0] else 'down',
+                'total': round(sum(values), 2),
+                'average': round(sum(values) / len(values), 2)
+            }
+        
+        return {
+            'months': month_labels,
+            'categories': result
+        }
 
