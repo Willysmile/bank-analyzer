@@ -450,4 +450,72 @@ class Analyzer:
             'savings_income': round(savings_income, 2),
             'savings_expenses': round(savings_expenses, 2),
         }
+    
+    def check_budget_status(self, month_key: str = None) -> Dict:
+        """Check current budget status against objectives
+        
+        Args:
+            month_key: Filter to specific month (format: YYYY-MM), defaults to current month
+        
+        Returns:
+            Dictionary with budget status for each objective
+        """
+        if not month_key:
+            today = datetime.now()
+            month_key = today.strftime("%Y-%m")
+        
+        transactions = self.db.get_all_transactions()
+        month_trans = [t for t in transactions if t.date.startswith(month_key)]
+        
+        # Get budget objectives
+        objectives = self.db.get_budget_objectives()
+        
+        budget_status = {
+            'month': month_key,
+            'objectives': [],
+            'total_budget': 0.0,
+            'total_spent': 0.0,
+            'total_remaining': 0.0,
+            'alert_count': 0
+        }
+        
+        for obj_id, category, limit in objectives:
+            # Calculate spent for this category in current month
+            spent = sum(abs(t.amount) for t in month_trans if t.amount < 0 and t.category == category)
+            remaining = limit - spent
+            percentage = (spent / limit * 100) if limit > 0 else 0
+            
+            # Determine status
+            if percentage >= 100:
+                status = 'dépassé'
+                alert = True
+            elif percentage >= 80:
+                status = 'attention'
+                alert = True
+            else:
+                status = 'ok'
+                alert = False
+            
+            if alert:
+                budget_status['alert_count'] += 1
+            
+            budget_status['objectives'].append({
+                'id': obj_id,
+                'category': category,
+                'limit': limit,
+                'spent': round(spent, 2),
+                'remaining': round(remaining, 2),
+                'percentage': round(percentage, 1),
+                'status': status,
+                'alert': alert
+            })
+            
+            budget_status['total_budget'] += limit
+            budget_status['total_spent'] += spent
+        
+        budget_status['total_remaining'] = round(budget_status['total_budget'] - budget_status['total_spent'], 2)
+        budget_status['total_budget'] = round(budget_status['total_budget'], 2)
+        budget_status['total_spent'] = round(budget_status['total_spent'], 2)
+        
+        return budget_status
 

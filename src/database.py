@@ -248,6 +248,50 @@ class Database:
         if self.connection:
             self.connection.close()
     
+    
     def __del__(self):
         """Destructor to ensure connection is closed"""
         self.close()
+    
+    # Budget Objectives Management
+    def add_budget_objective(self, category: str, limit_amount: float) -> int:
+        """Add a budget objective for a category"""
+        self.cursor.execute("""
+            INSERT INTO budget_objectives (category, limit_amount, period, active)
+            VALUES (?, ?, 'monthly', 1)
+        """, (category, limit_amount))
+        
+        self.connection.commit()
+        return self.cursor.lastrowid
+    
+    def get_budget_objectives(self) -> List[Tuple]:
+        """Get all active budget objectives"""
+        self.cursor.execute("""
+            SELECT id, category, limit_amount FROM budget_objectives
+            WHERE active = 1
+            ORDER BY category
+        """)
+        return self.cursor.fetchall()
+    
+    def update_budget_objective(self, objective_id: int, limit_amount: float) -> bool:
+        """Update a budget objective"""
+        self.cursor.execute("""
+            UPDATE budget_objectives
+            SET limit_amount = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (limit_amount, objective_id))
+        
+        self.connection.commit()
+        return self.cursor.rowcount > 0
+    
+    def delete_budget_objective(self, objective_id: int) -> bool:
+        """Delete a budget objective (soft delete)"""
+        self.cursor.execute("""
+            UPDATE budget_objectives
+            SET active = 0, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (objective_id,))
+        
+        self.connection.commit()
+        return self.cursor.rowcount > 0
+
