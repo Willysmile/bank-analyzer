@@ -687,14 +687,27 @@ class Analyzer:
             'categories': result
         }
     
-    def get_forecast_data(self) -> Dict:
-        """Get recurring transactions from last month for forecasting"""
-        # Get last month dates
-        today = datetime.now()
-        last_month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
-        last_month_end = today.replace(day=1) - timedelta(days=1)
+    def get_forecast_data(self, start_date: str = None, end_date: str = None) -> Dict:
+        """Get recurring transactions for forecasting
         
-        # Get recurring transactions from last month
+        Args:
+            start_date: Optional start date (YYYY-MM-DD). If None, uses first day of last month
+            end_date: Optional end date (YYYY-MM-DD). If None, uses last day of last month
+        """
+        # Get date range (last month by default)
+        today = datetime.now()
+        
+        if start_date is None:
+            last_month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        else:
+            last_month_start = datetime.strptime(start_date, "%Y-%m-%d")
+        
+        if end_date is None:
+            last_month_end = today.replace(day=1) - timedelta(days=1)
+        else:
+            last_month_end = datetime.strptime(end_date, "%Y-%m-%d")
+        
+        # Get recurring transactions in date range
         transactions = self.db.get_transactions_by_date_range(
             last_month_start.strftime("%Y-%m-%d"),
             last_month_end.strftime("%Y-%m-%d")

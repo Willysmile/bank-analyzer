@@ -677,6 +677,20 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         info_text = "Récurrences du mois précédent - Modifiez les montants pour anticiper le mois suivant"
         ttk.Label(frame, text=info_text, font=("Arial", 9, "italic")).pack()
         
+        # Date filter frame
+        date_filter_frame = ttk.LabelFrame(frame, text="📅 Filtrer par date", padding=10)
+        date_filter_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(date_filter_frame, text="Du:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.forecast_start_date = DateEntry(date_filter_frame, width=15, background='darkblue', 
+                                             foreground='white', borderwidth=2)
+        self.forecast_start_date.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        ttk.Label(date_filter_frame, text="Au:").grid(row=0, column=2, sticky=tk.W, padx=15, pady=5)
+        self.forecast_end_date = DateEntry(date_filter_frame, width=15, background='darkblue',
+                                           foreground='white', borderwidth=2)
+        self.forecast_end_date.grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
+        
         # Button frame
         button_frame = ttk.Frame(frame)
         button_frame.pack(fill=tk.X, pady=10)
@@ -745,7 +759,11 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             self.forecast_tree.delete(item)
         
         try:
-            forecast_data = self.analyzer.get_forecast_data()
+            # Get date range from widgets
+            start_date = self.forecast_start_date.get_date().strftime("%Y-%m-%d")
+            end_date = self.forecast_end_date.get_date().strftime("%Y-%m-%d")
+            
+            forecast_data = self.analyzer.get_forecast_data(start_date, end_date)
             self.forecast_data = {i: item for i, item in enumerate(forecast_data)}
             
             total_original = 0.0
