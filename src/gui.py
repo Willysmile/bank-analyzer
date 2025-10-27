@@ -892,7 +892,8 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
                 total_cat = data['vital'] + data['non_vital']
                 vital_pct = (data['vital'] / total_cat * 100) if total_cat > 0 else 0
                 
-                report += f"\n  {category.upper()}\n"
+                cat_display = str(category).upper() if category else "SANS CATÉGORIE"
+                report += f"\n  {cat_display}\n"
                 report += f"  {'─'*50}\n"
                 report += f"    ⭐ Vitales:     €{data['vital']:10.2f}  ({vital_pct:5.1f}%)\n"
                 report += f"    ◌ Normales:    €{data['non_vital']:10.2f}  ({100-vital_pct:5.1f}%)\n"
@@ -914,7 +915,11 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
     
     def edit_forecast_cell(self, event):
         """Edit forecast cell on double-click"""
-        item = self.forecast_tree.selection()[0]
+        selection = self.forecast_tree.selection()
+        if not selection:
+            return
+        
+        item = selection[0]
         col = self.forecast_tree.identify_column(event.x)
         
         # Only allow editing of last column (index 4)
