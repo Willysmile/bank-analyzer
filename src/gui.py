@@ -203,16 +203,18 @@ class BankAnalyzerGUI:
         container = ttk.Frame(frame)
         container.pack(fill=tk.BOTH, expand=True)
         
-        canvas = tk.Canvas(container, bg='#f8f9fa')
+        canvas = tk.Canvas(container, bg='#f8f9fa', highlightthickness=0)
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         self.dashboard_frame = ttk.Frame(canvas)
         
-        self.dashboard_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        # Bind canvas resize to make frame match canvas width
+        def on_canvas_configure(e):
+            canvas.itemconfigure(canvas_window, width=e.width)
+            canvas.configure(scrollregion=canvas.bbox("all"))
         
-        canvas.create_window((0, 0), window=self.dashboard_frame, anchor="nw")
+        canvas.bind("<Configure>", on_canvas_configure)
+        
+        canvas_window = canvas.create_window((0, 0), window=self.dashboard_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
         canvas.pack(side="left", fill="both", expand=True)
