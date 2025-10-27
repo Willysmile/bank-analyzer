@@ -12,21 +12,114 @@ from src.database import Database, Transaction
 class CSVImporter:
     """Imports CSV files from bank exports"""
     
-    # Default configuration for supported banks
-    DEFAULT_CONFIG = {
-        'date_column': 'Date',
-        'description_column': 'Libellé',
-        'debit_column': 'Débit euros',
-        'credit_column': 'Crédit euros',
-        'encoding': 'utf-8',
-        'delimiter': ',',
-        'skip_rows': 0,
-        'date_format': '%d/%m/%Y'
+    # Predefined configurations for different banks
+    BANK_CONFIGS = {
+        'french_bank': {
+            'name': 'Banque Française (Standard)',
+            'date_column': 'Date',
+            'description_column': 'Libellé',
+            'debit_column': 'Débit euros',
+            'credit_column': 'Crédit euros',
+            'encoding': 'utf-8',
+            'delimiter': ';',
+            'skip_rows': 0,
+            'date_format': '%d/%m/%Y'
+        },
+        'french_bank_windows': {
+            'name': 'Banque Française (Windows-1252)',
+            'date_column': 'Date',
+            'description_column': 'Libellé',
+            'debit_column': 'Débit euros',
+            'credit_column': 'Crédit euros',
+            'encoding': 'windows-1252',
+            'delimiter': ';',
+            'skip_rows': 0,
+            'date_format': '%d/%m/%Y'
+        },
+        'french_bank_windows_comma': {
+            'name': 'Banque Française (Windows-1252, Virgule)',
+            'date_column': 'Date',
+            'description_column': 'Libellé',
+            'debit_column': 'Débit euros',
+            'credit_column': 'Crédit euros',
+            'encoding': 'windows-1252',
+            'delimiter': ',',
+            'skip_rows': 0,
+            'date_format': '%d/%m/%Y'
+        },
+        'french_bank_comma': {
+            'name': 'Banque Française (Virgule)',
+            'date_column': 'Date',
+            'description_column': 'Libellé',
+            'debit_column': 'Débit euros',
+            'credit_column': 'Crédit euros',
+            'encoding': 'utf-8',
+            'delimiter': ',',
+            'skip_rows': 0,
+            'date_format': '%d/%m/%Y'
+        },
+        'paypal': {
+            'name': 'PayPal',
+            'date_column': 'Date',
+            'description_column': 'Nom',
+            'debit_column': 'Débit',
+            'credit_column': 'Crédit',
+            'encoding': 'utf-8',
+            'delimiter': ',',
+            'skip_rows': 0,
+            'date_format': '%d/%m/%Y'
+        },
+        'american_bank': {
+            'name': 'Banque Américaine',
+            'date_column': 'Date',
+            'description_column': 'Description',
+            'debit_column': 'Debit',
+            'credit_column': 'Credit',
+            'encoding': 'utf-8',
+            'delimiter': ',',
+            'skip_rows': 0,
+            'date_format': '%m/%d/%Y'
+        },
+        'generic_debit_credit': {
+            'name': 'Générique (Débit/Crédit)',
+            'date_column': 'Date',
+            'description_column': 'Description',
+            'debit_column': 'Débit',
+            'credit_column': 'Crédit',
+            'encoding': 'utf-8',
+            'delimiter': ',',
+            'skip_rows': 0,
+            'date_format': '%Y-%m-%d'
+        },
+        'generic_amount': {
+            'name': 'Générique (Montant)',
+            'date_column': 'Date',
+            'description_column': 'Description',
+            'amount_column': 'Montant',
+            'encoding': 'utf-8',
+            'delimiter': ',',
+            'skip_rows': 0,
+            'date_format': '%Y-%m-%d',
+            'amount_sign': 'mixed'  # positive/negative amounts
+        }
     }
+    
+    # Default configuration (fallback)
+    DEFAULT_CONFIG = BANK_CONFIGS['french_bank']
     
     def __init__(self, config: dict = None):
         """Initialize importer with optional custom config"""
         self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+    
+    @classmethod
+    def get_available_configs(cls):
+        """Get list of available bank configurations"""
+        return {key: config['name'] for key, config in cls.BANK_CONFIGS.items()}
+    
+    @classmethod
+    def get_config(cls, config_key: str):
+        """Get configuration by key"""
+        return cls.BANK_CONFIGS.get(config_key, cls.DEFAULT_CONFIG)
     
     def _detect_encoding(self, filepath: str) -> str:
         """Detect file encoding"""
@@ -46,19 +139,27 @@ class CSVImporter:
             
             # Find the header row by looking for the line with our expected columns
             header_row_idx = None
-            expected_keywords = {'Date', 'Libellé', 'Débit', 'Crédit'}
+            # Be more flexible with encoding issues - look for key parts
+            expected_patterns = [
+                ('Date', 'Libell'),  # Libellé becomes LibellÃ© in wrong encoding
+                ('Date', 'D'),       # Débit becomes DÃ©bit
+                ('Date', 'Crédit')   # Crédit might be preserved
+            ]
             
             for idx, line in enumerate(lines):
-                # Check if this line looks like a header
                 line_upper = line.upper()
-                if all(keyword.upper() in line_upper for keyword in expected_keywords):
-                    header_row_idx = idx
+                # Check multiple pattern combinations
+                for pattern in expected_patterns:
+                    if all(part.upper() in line_upper for part in pattern):
+                        header_row_idx = idx
+                        break
+                if header_row_idx is not None:
                     break
             
             if header_row_idx is None:
-                # Fallback: try to find line with Date and Libellé
+                # Fallback: try to find line with Date and some form of description column
                 for idx, line in enumerate(lines):
-                    if 'Date' in line and 'Libellé' in line:
+                    if 'Date' in line and ('Libell' in line or 'Description' in line):
                         header_row_idx = idx
                         break
             
@@ -71,7 +172,8 @@ class CSVImporter:
                 for _ in range(header_row_idx):
                     f.readline()
                 
-                reader = csv.DictReader(f, delimiter=delimiter)
+                # Use csv module with proper quote handling for multi-line fields
+                reader = csv.DictReader(f, delimiter=delimiter, quoting=csv.QUOTE_ALL)
                 
                 for row in reader:
                     # Skip empty rows and rows with all empty values
@@ -197,22 +299,47 @@ class CSVImporter:
             
             date_col = self.config['date_column']
             desc_col = self.config['description_column']
-            debit_col = self.config['debit_column']
-            credit_col = self.config['credit_column']
             
-            # Check required columns - be flexible with whitespace
+            # Check if using amount column or debit/credit columns
+            if 'amount_column' in self.config:
+                amount_col = self.config['amount_column']
+                required_cols = [date_col, desc_col, amount_col]
+            else:
+                debit_col = self.config['debit_column']
+                credit_col = self.config['credit_column']
+                required_cols = [date_col, desc_col, debit_col, credit_col]
+            
+            # Check required columns - be flexible with whitespace and encoding
             if rows:
                 first_row = rows[0]
                 # Clean column names from whitespace
                 available_cols = {k.strip(): v for k, v in first_row.items()}
-                required_cols = [date_col, desc_col, debit_col, credit_col]
                 
-                missing_cols = [col for col in required_cols if col not in available_cols]
+                # Create mapping for flexible column matching
+                col_mapping = {}
+                for required_col in required_cols:
+                    # Try exact match first
+                    if required_col in available_cols:
+                        col_mapping[required_col] = required_col
+                    else:
+                        # Try flexible matching for encoding issues
+                        req_lower = required_col.lower()
+                        for avail_col in available_cols:
+                            avail_lower = avail_col.lower()
+                            # Match key parts (ignore accents/encoding issues)
+                            if ('date' in req_lower and 'date' in avail_lower) or \
+                               ('libell' in req_lower and 'libell' in avail_lower) or \
+                               ('d' in req_lower and 'd' in avail_lower and 'euros' in avail_lower) or \
+                               ('cr' in req_lower and 'cr' in avail_lower and 'euros' in avail_lower) or \
+                               ('montant' in req_lower and 'montant' in avail_lower):
+                                col_mapping[required_col] = avail_col
+                                break
+                
+                missing_cols = [col for col in required_cols if col not in col_mapping]
                 
                 if missing_cols:
-                    # Try to find columns with similar names
                     available_names = list(available_cols.keys())
-                    raise ValueError(f"Missing columns in CSV. Expected: {', '.join(required_cols)}\nFound: {', '.join(available_names)}")
+                    raise ValueError(f"Colonnes manquantes dans le CSV. Attendu: {', '.join(required_cols)}\nTrouvé: {', '.join(available_names)}")
             
             # Process each row
             for idx, row in enumerate(rows, start=1):
@@ -220,14 +347,27 @@ class CSVImporter:
                     # Clean row keys (strip whitespace)
                     clean_row = {k.strip(): v for k, v in row.items()}
                     
-                    date = self._parse_date(clean_row.get(date_col, '').strip())
-                    description = clean_row.get(desc_col, '').strip()
+                    # Use mapped column names
+                    date_col_mapped = col_mapping.get(date_col, date_col)
+                    desc_col_mapped = col_mapping.get(desc_col, desc_col)
                     
-                    debit = self._clean_amount(clean_row.get(debit_col, ''))
-                    credit = self._clean_amount(clean_row.get(credit_col, ''))
+                    date = self._parse_date(clean_row.get(date_col_mapped, '').strip())
+                    description = clean_row.get(desc_col_mapped, '').strip()
                     
-                    # Combine debit/credit: debit is negative, credit is positive
-                    amount = credit - debit if credit > 0 else -debit
+                    # Handle amount calculation based on config
+                    if 'amount_column' in self.config:
+                        # Single amount column (positive/negative)
+                        amount_col_mapped = col_mapping.get(amount_col, amount_col)
+                        amount_str = clean_row.get(amount_col_mapped, '')
+                        amount = self._clean_amount(amount_str)
+                    else:
+                        # Separate debit/credit columns
+                        debit_col_mapped = col_mapping.get(debit_col, debit_col)
+                        credit_col_mapped = col_mapping.get(credit_col, credit_col)
+                        debit = self._clean_amount(clean_row.get(debit_col_mapped, ''))
+                        credit = self._clean_amount(clean_row.get(credit_col_mapped, ''))
+                        # Combine debit/credit: debit is negative, credit is positive
+                        amount = credit - debit if credit > 0 else -debit
                     
                     if not description:
                         warnings.append(f"Row {idx}: Empty description, skipping")

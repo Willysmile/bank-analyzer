@@ -3,6 +3,7 @@ Database module - SQLite database management
 """
 import sqlite3
 from pathlib import Path
+from typing import Optional
 from datetime import datetime
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
@@ -203,7 +204,7 @@ class Database:
             )
         return None
     
-    def update_transaction_category(self, transaction_id: int, category: str) -> bool:
+    def update_transaction_category(self, transaction_id: int, category: Optional[str]) -> bool:
         """Update transaction category"""
         self.cursor.execute("""
             UPDATE transactions

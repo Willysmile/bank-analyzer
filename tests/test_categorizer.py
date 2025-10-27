@@ -100,7 +100,7 @@ class TestCategorizer:
         )
 
         category = self.categorizer.auto_categorize(transaction)
-        assert category == "Autres"
+        assert category is None
 
     def test_auto_categorize_case_insensitive(self):
         """Test that auto-categorization is case insensitive"""
@@ -187,14 +187,14 @@ class TestCategorizer:
 
         # Auto-categorize all
         count = self.categorizer.categorize_all_auto()
-        assert count == 3
+        assert count == 2  # Only transactions matching rules should be categorized
 
         # Verify categorizations
         all_transactions = self.db.get_all_transactions()
         categories = [t.category for t in all_transactions]
         assert "Alimentation" in categories
-        assert "Internet/Téléphone" in categories
-        assert "Autres" in categories
+        assert "Électricité/Gaz/Eau" in categories
+        assert None in categories  # Unknown transaction should remain uncategorized
 
     def test_get_categories(self):
         """Test getting all available categories"""

@@ -283,49 +283,41 @@ class BankAnalyzerGUI:
         for widget in self.dashboard_frame.winfo_children():
             widget.destroy()
         
-        # 1. KPI Cards Section
-        kpi_wrapper = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
-        kpi_wrapper.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Create main container
+        main_frame = ttk.Frame(self.dashboard_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Create grid container for cards
-        cards_container = tk.Frame(kpi_wrapper)
-        cards_container.pack(fill=tk.BOTH, expand=True)
+        # KPI Cards Section - Single column layout
+        kpi_frame = ttk.LabelFrame(main_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
+        kpi_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Configure 2 equal columns
-        for i in range(2):
-            cards_container.columnconfigure(i, weight=1)
-        
-        # Configure 3 equal rows
-        for i in range(3):
-            cards_container.rowconfigure(i, weight=1)
-        
-        # Create cards using grid - 2 columns x 3 rows
-        card_data = [
-            ("Revenus", f"€{summary['monthly_income']:.2f}", "#27AE60", 0, 0),
-            ("Dépenses", f"€{summary['monthly_expenses']:.2f}", "#E74C3C", 0, 1),
+        # Create all KPI cards in a single column
+        kpi_data = [
+            ("Revenus", f"€{summary['monthly_income']:.2f}", "#27AE60"),
+            ("Dépenses", f"€{summary['monthly_expenses']:.2f}", "#E74C3C"),
             ("Bilan Net", f"€{summary['monthly_net']:.2f}", 
-             "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C", 1, 0),
+             "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C"),
             ("Statut", f"{'Bon' if summary['status'] == 'healthy' else ('Attention' if summary['status'] == 'warning' else 'Déficit')}", 
-             "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C"), 1, 1),
-            ("Récurrent", f"€{summary['recurring_monthly']:.2f}", "#3498DB", 2, 0),
-            ("Transactions", f"{summary['transaction_count']}", "#9B59B6", 2, 1),
+             "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C")),
+            ("Récurrent", f"€{summary['recurring_monthly']:.2f}", "#3498DB"),
+            ("Transactions", f"{summary['transaction_count']}", "#9B59B6"),
         ]
-
         
-        for title, value, color, row, col in card_data:
-            self.create_kpi_card(cards_container, title, value, color, row, col)
+        # Create cards in sequence
+        for title, value, color in kpi_data:
+            self._create_kpi_card(kpi_frame, title, value, color)
         
-        # 2. Monthly Trend Chart
+        # Monthly Trend Chart
         if trend_chart:
-            chart_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Tendance Mensuelle", padding=10)
-            chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            chart_frame = ttk.LabelFrame(main_frame, text="📈 Tendance Mensuelle", padding=10)
+            chart_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
             self.add_chart_to_frame(chart_frame, trend_chart, "")
         
-            # 3. Savings Analysis
-            savings_frame = ttk.LabelFrame(self.dashboard_frame, text="💾 Analyse Épargne", padding=15)
-            savings_frame.pack(fill=tk.X, padx=10, pady=10)
-            
-            savings_text = f"""
+        # Savings Analysis
+        savings_frame = ttk.LabelFrame(main_frame, text="💾 Analyse Épargne", padding=15)
+        savings_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        savings_text = f"""
 📊 Bilan Externe: €{savings['external_balance']:.2f}
 💾 Bilan Épargne: €{savings['savings_balance']:.2f}
 
@@ -337,31 +329,39 @@ class BankAnalyzerGUI:
 
 📈 Utilisation de l'épargne: {savings['savings_usage_ratio']:.1f}%
 """
-            ttk.Label(savings_frame, text=savings_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+        ttk.Label(savings_frame, text=savings_text, font=("Courier", 10), justify=tk.LEFT).pack(anchor=tk.W)
+        
+        # Top Months
+        if monthly:
+            months_frame = ttk.LabelFrame(main_frame, text="📅 Derniers Mois", padding=15)
+            months_frame.pack(fill=tk.X)
             
-            # 4. Top 5 Months
-            if monthly:
-                months_frame = ttk.LabelFrame(self.dashboard_frame, text="📅 Derniers Mois", padding=15)
-                months_frame.pack(fill=tk.X, padx=10, pady=10)
-                
-                months_text = "Mois | Revenus | Dépenses | Bilan | Santé\n"
-                months_text += "─" * 55 + "\n"
-                
-                for i, (month, stats) in enumerate(list(monthly.items())[:6]):
-                    health = "✅" if stats['net'] >= 0 else "❌"
-                    months_text += f"{month} | €{stats['income']:7.2f} | €{stats['expenses']:7.2f} | €{stats['net']:7.2f} | {health}\n"
-                
-                ttk.Label(months_frame, text=months_text, font=("Courier", 9), justify=tk.LEFT).pack(anchor=tk.W)
+            months_text = "Mois | Revenus | Dépenses | Bilan | Santé\n"
+            months_text += "─" * 55 + "\n"
+            
+            for i, (month, stats) in enumerate(list(monthly.items())[:6]):
+                health = "✅" if stats['net'] >= 0 else "❌"
+                months_text += f"{month} | €{stats['income']:7.2f} | €{stats['expenses']:7.2f} | €{stats['net']:7.2f} | {health}\n"
+            
+            ttk.Label(months_frame, text=months_text, font=("Courier", 9), justify=tk.LEFT).pack(anchor=tk.W)
             
             self.update_status("Tableau de bord actualisé")
     
-    def create_kpi_card(self, parent, title, value, color, row, col):
-        """Create a KPI card widget"""
-        card = tk.Frame(parent, bg=color, height=100)
-        card.grid(row=row, column=col, padx=8, pady=8, sticky=tk.NSEW)
+    def _create_kpi_card(self, parent, title, value, color):
+        """Create a simple KPI card widget"""
+        # Create card frame
+        card = tk.Frame(parent, bg=color)
+        card.pack(fill=tk.X, pady=2)
         
-        ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0), fill=tk.X)
-        ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10, fill=tk.BOTH, expand=True)
+        # Title label
+        title_label = tk.Label(card, text=title, font=("Arial", 9, "bold"),
+                              bg=color, fg="white", anchor="w")
+        title_label.pack(fill=tk.X, padx=8, pady=(4, 0))
+        
+        # Value label
+        value_label = tk.Label(card, text=value, font=("Arial", 12, "bold"),
+                              bg=color, fg="white", anchor="w")
+        value_label.pack(fill=tk.X, padx=8, pady=(0, 4))
     
     def setup_analysis_tab(self):
         """Setup the analysis tab for detailed monthly and savings analysis"""
@@ -1113,6 +1113,25 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         browse_btn = ttk.Button(file_frame, text="🔍 Parcourir...", command=self.browse_file)
         browse_btn.pack(side=tk.RIGHT, padx=5)
         
+        # Format selection
+        format_frame = ttk.LabelFrame(frame, text="🎯 Format du CSV", padding=15)
+        format_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Label(format_frame, text="Type de banque/format:").pack(anchor=tk.W)
+        
+        # Get available formats
+        from src.importer import CSVImporter
+        available_configs = CSVImporter.get_available_configs()
+        
+        self.format_var = tk.StringVar(value="french_bank")  # Default to French bank
+        format_combo = ttk.Combobox(format_frame, textvariable=self.format_var, 
+                                   values=list(available_configs.values()), state="readonly")
+        format_combo.pack(fill=tk.X, pady=5)
+        
+        # Set initial display
+        if available_configs:
+            format_combo.set(available_configs["french_bank"])
+        
         # Import section
         import_frame = tk.Frame(frame, bg=self.COLORS['light'])
         import_frame.pack(fill=tk.X, pady=20)
@@ -1162,12 +1181,28 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             messagebox.showwarning("Attention", "Sélectionne un fichier d'abord")
             return
         
+        # Get selected format
+        selected_format_name = self.format_var.get()
+        config_key = None
+        for key, name in CSVImporter.get_available_configs().items():
+            if name == selected_format_name:
+                config_key = key
+                break
+        
+        if not config_key:
+            messagebox.showerror("Erreur", "Format non reconnu")
+            return
+        
+        # Create importer with selected config
+        config = CSVImporter.get_config(config_key)
+        importer = CSVImporter(config)
+        
         self.import_text.delete(1.0, tk.END)
-        self.import_text.insert(tk.END, "⏳ Importation en cours...\n")
+        self.import_text.insert(tk.END, f"⏳ Importation en cours avec format '{selected_format_name}'...\n")
         self.root.update()
         
         try:
-            transactions, warnings, skipped_count = self.importer.import_file(self.file_path, self.db)
+            transactions, warnings, skipped_count = importer.import_file(self.file_path, self.db)
             
             imported_count = len(transactions)
             
@@ -1930,7 +1965,35 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         rules_btn_frame.pack(fill=tk.X)
         
         ttk.Button(rules_btn_frame, text="➕ Ajouter règle", command=self.add_rule).pack(side=tk.LEFT, padx=5, pady=5)
+        ttk.Button(rules_btn_frame, text="❌ Supprimer règle", command=self.delete_rule).pack(side=tk.LEFT, padx=5, pady=5)
         ttk.Button(rules_btn_frame, text="🔄 Actualiser", command=self.refresh_rules_display).pack(side=tk.LEFT, padx=5, pady=5)
+        
+        # Update uncategorized count initially
+        self.root.after(100, self.update_uncategorized_count)  # Delay to ensure widget is created
+        
+        # Bottom: Auto-categorization section
+        bottom_frame = ttk.LabelFrame(frame, text="Catégorisation Automatique", padding=10)
+        bottom_frame.pack(fill=tk.X, pady=10)
+        
+        # Status info
+        status_frame = ttk.Frame(bottom_frame)
+        status_frame.pack(fill=tk.X, pady=5)
+        
+        self.uncategorized_count_label = ttk.Label(status_frame, text="Transactions non catégorisées: calcul en cours...")
+        self.uncategorized_count_label.pack(side=tk.LEFT)
+        
+        ttk.Button(status_frame, text="🔄 Actualiser", command=self.update_uncategorized_count).pack(side=tk.RIGHT, padx=5)
+        
+        # Action buttons
+        action_frame = ttk.Frame(bottom_frame)
+        action_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(action_frame, text="🎯 Catégoriser automatiquement", 
+                  command=self.auto_categorize_all).pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="📋 Voir transactions non catégorisées", 
+                  command=self.show_uncategorized_transactions).pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_frame, text="⚙️ Modifier règles AUTO_RULES", 
+                  command=self.edit_auto_rules).pack(side=tk.LEFT, padx=5)
     
     def refresh_categories_tree(self):
         """Refresh categories tree view with hierarchy"""
@@ -2032,24 +2095,259 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         """Add a new categorization rule"""
         keyword = simpledialog.askstring("Ajouter une règle", "Mot-clé:")
         if keyword:
-            categories = self.categorizer.get_categories()
-            # Simple selection
-            cat = tk.Toplevel(self.root)
-            cat.title("Sélectionner une catégorie")
+            # Get all categories including subcategories
+            all_categories = self.categorizer.get_all_categories_with_parent()
             
-            selected = tk.StringVar()
+            # Create a selection window
+            cat_window = tk.Toplevel(self.root)
+            cat_window.title("Sélectionner une catégorie")
+            cat_window.geometry("400x300")
             
-            for c in categories:
-                ttk.Radiobutton(cat, text=c, variable=selected, value=c).pack(anchor=tk.W, padx=20)
+            ttk.Label(cat_window, text=f"Ajouter la règle '{keyword}' à :", 
+                     font=("Arial", 10, "bold")).pack(pady=10)
             
-            def confirm():
-                if selected.get():
-                    self.categorizer.add_rule(keyword, selected.get())
-                    self.refresh_rules_display()
-                    messagebox.showinfo("Succès", f"Règle '{keyword}' ajoutée!")
-                    cat.destroy()
+            # Create a treeview for category selection
+            tree_frame = ttk.Frame(cat_window)
+            tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
             
-            ttk.Button(cat, text="Valider", command=confirm).pack(pady=10)
+            scrollbar = ttk.Scrollbar(tree_frame)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            cat_tree = ttk.Treeview(tree_frame, yscrollcommand=scrollbar.set, height=10)
+            cat_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.config(command=cat_tree.yview)
+            
+            # Populate tree
+            parent_map = {}
+            for cat in all_categories:
+                if cat['parent_id'] is None:
+                    # Parent category
+                    parent_map[cat['id']] = cat_tree.insert('', 'end', text=cat['name'], open=True)
+                else:
+                    # Subcategory
+                    parent_id = cat['parent_id']
+                    parent_node = parent_map.get(parent_id)
+                    if parent_node:
+                        cat_tree.insert(parent_node, 'end', text=f"  {cat['name']}")
+            
+            selected_category = None
+            
+            def select_category():
+                nonlocal selected_category
+                selection = cat_tree.selection()
+                if selection:
+                    item_text = cat_tree.item(selection[0])['text'].strip()
+                    selected_category = item_text
+                    cat_window.destroy()
+                    
+                    # Add the rule
+                    if self.categorizer.add_rule(keyword, selected_category):
+                        self.refresh_rules_display()
+                        messagebox.showinfo("Succès", f"Règle '{keyword}' ajoutée à '{selected_category}'!")
+                    else:
+                        messagebox.showerror("Erreur", "Impossible d'ajouter la règle")
+            
+            ttk.Button(cat_window, text="Valider", command=select_category).pack(pady=10)
+    
+    def delete_rule(self):
+        """Delete a categorization rule"""
+        try:
+            rules = self.categorizer.get_rules()
+            
+            if not rules:
+                messagebox.showinfo("Info", "Aucune règle à supprimer")
+                return
+            
+            # Create selection window
+            del_window = tk.Toplevel(self.root)
+            del_window.title("Supprimer une règle")
+            del_window.geometry("500x400")
+            
+            ttk.Label(del_window, text="Sélectionner la règle à supprimer:", 
+                     font=("Arial", 10, "bold")).pack(pady=10)
+            
+            # Create listbox with rules
+            list_frame = ttk.Frame(del_window)
+            list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            scrollbar = ttk.Scrollbar(list_frame)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, font=("Courier", 10))
+            listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.config(command=listbox.yview)
+            
+            # Populate listbox
+            rule_map = {}
+            for i, rule in enumerate(rules):
+                display_text = f"{rule['category']} -> '{rule['keyword']}'"
+                listbox.insert(tk.END, display_text)
+                rule_map[i] = rule['id']
+            
+            def delete_selected():
+                selection = listbox.curselection()
+                if selection:
+                    rule_id = rule_map[selection[0]]
+                    rule_text = listbox.get(selection[0])
+                    
+                    if messagebox.askyesno("Confirmer", f"Supprimer la règle:\n{rule_text}"):
+                        if self.categorizer.delete_rule(rule_id):
+                            self.refresh_rules_display()
+                            messagebox.showinfo("Succès", "Règle supprimée!")
+                            del_window.destroy()
+                        else:
+                            messagebox.showerror("Erreur", "Impossible de supprimer la règle")
+            
+            ttk.Button(del_window, text="Supprimer", command=delete_selected).pack(pady=10)
+            
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la suppression: {str(e)}")
+    
+    def update_uncategorized_count(self):
+        """Update the count of uncategorized transactions"""
+        try:
+            uncategorized = self.categorizer.get_uncategorized()
+            count = len(uncategorized)
+            self.uncategorized_count_label.config(text=f"Transactions non catégorisées: {count}")
+        except Exception as e:
+            self.uncategorized_count_label.config(text=f"Erreur: {str(e)}")
+    
+    def auto_categorize_all(self):
+        """Auto-categorize all uncategorized transactions"""
+        try:
+            count = self.categorizer.categorize_all_auto()
+            messagebox.showinfo("Succès", f"{count} transactions ont été automatiquement catégorisées!")
+            self.update_uncategorized_count()
+            self.refresh_dashboard()  # Refresh dashboard to show updated stats
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la catégorisation automatique: {str(e)}")
+    
+    def show_uncategorized_transactions(self):
+        """Show a window with uncategorized transactions"""
+        try:
+            uncategorized = self.categorizer.get_uncategorized()
+            
+            if not uncategorized:
+                messagebox.showinfo("Info", "Toutes les transactions sont déjà catégorisées!")
+                return
+            
+            # Create a new window
+            window = tk.Toplevel(self.root)
+            window.title("Transactions non catégorisées")
+            window.geometry("800x600")
+            
+            # Title
+            ttk.Label(window, text=f"Transactions non catégorisées ({len(uncategorized)})", 
+                     font=("Arial", 12, "bold")).pack(pady=10)
+            
+            # Create a frame for the list
+            frame = ttk.Frame(window)
+            frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            # Scrollbar
+            scrollbar = ttk.Scrollbar(frame)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            # Listbox for transactions
+            listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set, font=("Courier", 10))
+            listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.config(command=listbox.yview)
+            
+            # Add transactions to listbox
+            for i, transaction in enumerate(uncategorized[:100]):  # Limit to 100 for performance
+                desc = transaction.description.replace('\n', ' ').replace('\r', ' ')[:60]
+                amount = f"{transaction.amount:+.2f}€"
+                date = transaction.date
+                listbox.insert(tk.END, f"{date} | {amount:>10} | {desc}")
+            
+            if len(uncategorized) > 100:
+                listbox.insert(tk.END, f"... et {len(uncategorized) - 100} autres transactions")
+            
+            # Buttons
+            btn_frame = ttk.Frame(window)
+            btn_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            ttk.Button(btn_frame, text="🎯 Catégoriser automatiquement", 
+                      command=lambda: self.auto_categorize_and_close(window)).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="Fermer", 
+                      command=window.destroy).pack(side=tk.RIGHT, padx=5)
+            
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'affichage: {str(e)}")
+    
+    def auto_categorize_and_close(self, window):
+        """Auto-categorize and close the window"""
+        self.auto_categorize_all()
+        window.destroy()
+    
+    def edit_auto_rules(self):
+        """Edit the AUTO_RULES dictionary"""
+        try:
+            # Create a new window for editing rules
+            window = tk.Toplevel(self.root)
+            window.title("Modifier les règles AUTO_RULES")
+            window.geometry("900x700")
+            
+            # Title
+            ttk.Label(window, text="Règles de catégorisation automatique", 
+                     font=("Arial", 12, "bold")).pack(pady=10)
+            ttk.Label(window, text="Format: {'Catégorie': ['mot-clé1', 'mot-clé2', ...]}", 
+                     font=("Arial", 9)).pack(pady=5)
+            
+            # Text area for editing
+            text_frame = ttk.Frame(window)
+            text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            scrollbar = ttk.Scrollbar(text_frame)
+            scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            
+            text_widget = tk.Text(text_frame, yscrollcommand=scrollbar.set, font=("Courier", 10))
+            text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            scrollbar.config(command=text_widget.yview)
+            
+            # Load current AUTO_RULES
+            import json
+            current_rules = self.categorizer.AUTO_RULES.copy()
+            # Convert to more readable format
+            formatted_rules = json.dumps(current_rules, indent=2, ensure_ascii=False)
+            text_widget.insert(tk.END, formatted_rules)
+            
+            # Buttons
+            btn_frame = ttk.Frame(window)
+            btn_frame.pack(fill=tk.X, padx=10, pady=10)
+            
+            def save_rules():
+                try:
+                    content = text_widget.get(1.0, tk.END).strip()
+                    new_rules = json.loads(content)
+                    
+                    # Validate format
+                    if not isinstance(new_rules, dict):
+                        raise ValueError("Les règles doivent être un dictionnaire")
+                    
+                    for cat, keywords in new_rules.items():
+                        if not isinstance(keywords, list):
+                            raise ValueError(f"Les mots-clés pour '{cat}' doivent être une liste")
+                    
+                    # Update the categorizer
+                    self.categorizer.AUTO_RULES = new_rules
+                    messagebox.showinfo("Succès", "Règles mises à jour! Les modifications prendront effet lors de la prochaine catégorisation automatique.")
+                    window.destroy()
+                    
+                except json.JSONDecodeError as e:
+                    messagebox.showerror("Erreur", f"JSON invalide: {str(e)}")
+                except ValueError as e:
+                    messagebox.showerror("Erreur", f"Format invalide: {str(e)}")
+                except Exception as e:
+                    messagebox.showerror("Erreur", f"Erreur inattendue: {str(e)}")
+            
+            ttk.Button(btn_frame, text="💾 Sauvegarder", command=save_rules).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="🔄 Restaurer", 
+                      command=lambda: text_widget.delete(1.0, tk.END) or text_widget.insert(tk.END, json.dumps(current_rules, indent=2, ensure_ascii=False))).pack(side=tk.LEFT, padx=5)
+            ttk.Button(btn_frame, text="❌ Annuler", command=window.destroy).pack(side=tk.RIGHT, padx=5)
+            
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de l'ouverture de l'éditeur: {str(e)}")
     
     def setup_settings_tab(self):
         """Setup settings tab"""
@@ -2071,6 +2369,7 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         
         ttk.Button(btn_frame, text="📊 Statistiques BD", command=self.show_db_stats).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="💾 Exporter", command=self.export_db).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="📥 Importer", command=self.import_db).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="� Supprimer doublons", command=self.remove_duplicates).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="�🗑️ Vider", command=self.clear_db).pack(side=tk.LEFT, padx=5)
         
@@ -2138,6 +2437,58 @@ Règles: {len(self.categorizer.get_rules())}
             import shutil
             shutil.copy(str(self.db.db_path), file_path)
             messagebox.showinfo("Succès", f"Base de données exportée vers:\n{file_path}")
+    
+    def import_db(self):
+        """Import database"""
+        if not messagebox.askyesno("Attention!", 
+            "Importer une base de données?\n\n" +
+            "⚠️ Cette action remplacera complètement la base de données actuelle!\n" +
+            "💾 Pensez à faire une sauvegarde avant si nécessaire.\n\n" +
+            "Voulez-vous continuer?"):
+            return
+        
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Database", "*.db"), ("All files", "*.*")],
+            title="Sélectionner une base de données à importer"
+        )
+        
+        if file_path:
+            try:
+                import shutil
+                
+                # Close current database connection
+                if hasattr(self.db, 'connection'):
+                    self.db.connection.close()
+                
+                # Replace the database file
+                shutil.copy(file_path, str(self.db.db_path))
+                
+                # Reinitialize database connection
+                self.db = Database()
+                self.categorizer = Categorizer(self.db)
+                self.analyzer = Analyzer(self.db)
+                
+                # Refresh all views
+                self.refresh_transactions()
+                self.refresh_categories_tree()
+                self.refresh_rules_display()
+                self.update_stats_display()
+                
+                # Refresh dashboard and forecast
+                self.refresh_dashboard()
+                self.refresh_forecast()
+                
+                messagebox.showinfo("Succès", f"Base de données importée depuis:\n{file_path}\n\nL'application a été rechargée.")
+                
+            except Exception as e:
+                messagebox.showerror("Erreur", f"Erreur lors de l'importation:\n{str(e)}\n\nLa base de données n'a pas été modifiée.")
+                # Try to reinitialize database connection in case of error
+                try:
+                    self.db = Database()
+                    self.categorizer = Categorizer(self.db)
+                    self.analyzer = Analyzer(self.db)
+                except Exception:
+                    pass
     
     def clear_db(self):
         """Clear database"""

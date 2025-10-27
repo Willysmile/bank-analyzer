@@ -1,7 +1,7 @@
 """
 Categorizer module - Handles transaction categorization
 """
-from typing import List, Dict
+from typing import List, Dict, Optional
 from src.database import Database, Transaction
 
 
@@ -141,14 +141,37 @@ class Categorizer:
     
     # Keyword rules for auto-categorization
     AUTO_RULES = {
+        # Existing rules
         "Alimentation": ["lidl", "carrefour", "intermarche", "restaurant", "mc donald", "pizza", "boulangerie", "boucherie"],
         "Transport": ["essence", "parking", "sncf", "bus", "metro", "uber", "taxi", "autolib", "carburant"],
         "Logement": ["loyer", "immobilier", "proprio", "syndic"],
-        "Internet/Téléphone": ["edf", "orange", "water", "eau", "electricite", "gaz", "internet", "téléphone", "sfr", "bouygues"],
+        "Internet/Téléphone": ["orange", "water", "internet", "téléphone", "sfr", "bouygues", "free", "numericable"],
         "Loisirs": ["cinema", "theatre", "spotify", "netflix", "jeux", "flickr", "steam", "playstation"],
         "Santé": ["pharmacie", "docteur", "medical", "sante", "dentiste"],
         "Éducation": ["ecole", "universite", "formation", "cours"],
-        "Salaire": ["salaire", "virement salaire", "paye", "traitement"],
+        
+        # Income categories
+        "Salaire": ["virement salaire", "bulletin de salaire", "virement de salaire", "payement salaire", 
+                   "salaire net", "salaire brut", "rémunération", "payroll", "salaires", "revenus d'activité",
+                   "traitement mensuel", "paye mensuelle"],
+        
+        # New rules based on your CSV analysis
+        "Électricité/Gaz/Eau": ["electricite de france", "edf", "veolia eau", "compagnie generale", "eau potable", 
+                              "gaz de france", "grdf", "engie", "suez", "veolia", "eau", "electricite", "gaz"],
+        "Dons/Charité": ["le rire medecin", "fondation pour la recherche medi", "frm", "don", "charite", "association"],
+        "Banques/Prêts": ["floa bank", "banque casino", "interets debiteurs", "direction generale des finances", 
+                         "franchise interets debiteurs", "credit", "pret", "emprunt"],
+        "Cotisations": ["offre compte a composer", "cotisation", "syndicat", "mutuelle"],
+        "Virements personnels": ["rabillard fabien", "virement emis web", "virement en votre faveur", "virement familial"],
+        "Associations": ["asso. developpement artistique", "developpement artistique", "association"],
+        "Virements externes": ["revolut", "boursorama", "lbc france", "leboncoin payout", "mangopay"],
+        "Achats en ligne": ["paypal europe", "paypal", "amazon", "cdiscount", "ebay", "aliexpress"],
+        
+        # Additional categories for better coverage
+        "Assurances": ["assurance auto", "acommeassure", "assurance", "macif", "axa", "allianz", "maif"],
+        "Bricolage": ["leroy merlin", "bricocash", "bricolage", "castorama", "brico depot"],
+        "Courses/Shopping": ["d'accueil", "centre commercial", "galerie marchande", "supermarche", "hypermarché"],
+        "Frais bancaires": ["frais carte etranger", "frais", "commission", "agios"],
     }
     
     DEFAULT_CATEGORIES = list(DEFAULT_CATEGORIES_EXPENSES.keys()) + list(DEFAULT_CATEGORIES_INCOME.keys())
@@ -293,18 +316,26 @@ class Categorizer:
         
         self.db.connection.commit()
     
-    def auto_categorize(self, transaction: Transaction) -> str:
+    def auto_categorize(self, transaction: Transaction) -> Optional[str]:
         """Auto-categorize a transaction based on rules"""
         description = transaction.description.lower()
         
+        # First check database rules
+        if self.db:
+            db_rules = self.get_rules()
+            for rule in db_rules:
+                if rule['keyword'].lower() in description:
+                    return rule['category']
+        
+        # Then check hardcoded AUTO_RULES
         for category, keywords in self.AUTO_RULES.items():
             for keyword in keywords:
                 if keyword.lower() in description:
                     return category
         
-        return "Autres"
+        return None  # Don't categorize if no rules match
     
-    def categorize_transaction(self, transaction_id: int, category: str) -> bool:
+    def categorize_transaction(self, transaction_id: int, category: Optional[str]) -> bool:
         """Manually categorize a transaction"""
         if not self.db:
             return False
@@ -345,7 +376,7 @@ class Categorizer:
         
         for transaction in uncategorized:
             category = self.auto_categorize(transaction)
-            if self.categorize_transaction(transaction.id, category):
+            if category is not None and self.categorize_transaction(transaction.id, category):
                 count += 1
         
         return count
