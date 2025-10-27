@@ -194,59 +194,82 @@ class BankAnalyzerGUI:
         self.refresh_dashboard()
     
     def refresh_dashboard(self):
-        """Refresh dashboard with latest data"""
+        """Refresh dashboard with latest data (threaded for responsiveness)"""
+        # Show loading state
+        for widget in self.dashboard_frame.winfo_children():
+            widget.destroy()
+        
+        loading_label = ttk.Label(self.dashboard_frame, text="⏳ Chargement du tableau de bord...", font=("Arial", 12))
+        loading_label.pack(pady=50)
+        
+        # Run in background thread
+        thread = Thread(target=self._fetch_dashboard_data, daemon=True)
+        thread.start()
+    
+    def _fetch_dashboard_data(self):
+        """Fetch dashboard data in background thread"""
+        try:
+            # Get dashboard data (blocking, but in background thread)
+            summary = self.analyzer.get_dashboard_summary()
+            monthly = self.analyzer.get_monthly_statistics()
+            savings = self.analyzer.get_savings_analysis()
+            trend_chart = self.analyzer.get_monthly_trend_chart()
+            savings_chart = self.analyzer.get_savings_chart()
+            
+            # Update UI in main thread
+            self.root.after(0, self._update_dashboard_ui, summary, monthly, savings, trend_chart, savings_chart)
+        
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("Erreur", f"Erreur tableau de bord:\n{str(e)}"))
+    
+    def _update_dashboard_ui(self, summary, monthly, savings, trend_chart, savings_chart):
+        """Update dashboard UI (runs in main thread)"""
         # Clear previous content
         for widget in self.dashboard_frame.winfo_children():
             widget.destroy()
         
-        try:
-            # Get dashboard data
-            summary = self.analyzer.get_dashboard_summary()
-            monthly = self.analyzer.get_monthly_statistics()
-            savings = self.analyzer.get_savings_analysis()
-            
-            # 1. KPI Cards Section
-            kpi_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
-            kpi_frame.pack(fill=tk.X, padx=10, pady=10)
-            
-            # Grid of KPI cards
-            cards_grid = ttk.Frame(kpi_frame)
-            cards_grid.pack(fill=tk.X)
-            
-            # Card 1: Monthly Income
-            self.create_kpi_card(cards_grid, "💰 Revenus", f"€{summary['monthly_income']:.2f}", 
-                                "#27AE60", 0, 0)
-            
-            # Card 2: Monthly Expenses
-            self.create_kpi_card(cards_grid, "💸 Dépenses", f"€{summary['monthly_expenses']:.2f}",
-                                "#E74C3C", 0, 1)
-            
-            # Card 3: Monthly Net
-            net_color = "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C"
-            self.create_kpi_card(cards_grid, "📊 Bilan Net", f"€{summary['monthly_net']:.2f}",
-                                net_color, 0, 2)
-            
-            # Card 4: Status
-            status_emoji = "✅" if summary['status'] == 'healthy' else ("⚠️" if summary['status'] == 'warning' else "❌")
-            status_text = "Bon" if summary['status'] == 'healthy' else ("Attention" if summary['status'] == 'warning' else "Déficit")
-            status_color = "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C")
-            self.create_kpi_card(cards_grid, "🎯 Statut", f"{status_emoji} {status_text}",
-                                status_color, 1, 0)
-            
-            # Card 5: Recurring
-            self.create_kpi_card(cards_grid, "🔄 Récurrent/mois", f"€{summary['recurring_monthly']:.2f}",
-                                "#3498DB", 1, 1)
-            
-            # Card 6: Transactions
-            self.create_kpi_card(cards_grid, "📝 Transactions", f"{summary['transaction_count']}",
-                                "#9B59B6", 1, 2)
-            
-            # 2. Monthly Trend Chart
-            trend_chart = self.analyzer.get_monthly_trend_chart()
-            if trend_chart:
-                chart_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Tendance Mensuelle", padding=10)
-                chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-                self.add_chart_to_frame(chart_frame, trend_chart, "")
+        # 1. KPI Cards Section
+        kpi_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
+        kpi_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        # Grid of KPI cards
+        cards_grid = ttk.Frame(kpi_frame)
+        cards_grid.pack(fill=tk.X)
+        
+        # Card 1: Monthly Income
+        self.create_kpi_card(cards_grid, "💰 Revenus", f"€{summary['monthly_income']:.2f}", 
+                            "#27AE60", 0, 0)
+        
+        # Card 2: Monthly Expenses
+        self.create_kpi_card(cards_grid, "💸 Dépenses", f"€{summary['monthly_expenses']:.2f}",
+                            "#E74C3C", 0, 1)
+        
+        # Card 3: Monthly Net
+        net_color = "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C"
+        self.create_kpi_card(cards_grid, "📊 Bilan Net", f"€{summary['monthly_net']:.2f}",
+                            net_color, 0, 2)
+        
+        # Card 4: Status
+        status_emoji = "✅" if summary['status'] == 'healthy' else ("⚠️" if summary['status'] == 'warning' else "❌")
+        status_text = "Bon" if summary['status'] == 'healthy' else ("Attention" if summary['status'] == 'warning' else "Déficit")
+        status_color = "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C")
+        self.create_kpi_card(cards_grid, "🎯 Statut", f"{status_emoji} {status_text}",
+                            status_color, 1, 0)
+        
+        # Card 5: Recurring
+        self.create_kpi_card(cards_grid, "🔄 Récurrent/mois", f"€{summary['recurring_monthly']:.2f}",
+                            "#3498DB", 1, 1)
+        
+        # Card 6: Transactions
+        self.create_kpi_card(cards_grid, "📝 Transactions", f"{summary['transaction_count']}",
+                            "#9B59B6", 1, 2)
+        
+        # 2. Monthly Trend Chart
+        if trend_chart:
+            chart_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Tendance Mensuelle", padding=10)
+            chart_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            self.add_chart_to_frame(chart_frame, trend_chart, "")
+        
             
             # 3. Savings Analysis
             savings_frame = ttk.LabelFrame(self.dashboard_frame, text="💾 Analyse Épargne", padding=15)
@@ -281,10 +304,6 @@ class BankAnalyzerGUI:
                 ttk.Label(months_frame, text=months_text, font=("Courier", 9), justify=tk.LEFT).pack(anchor=tk.W)
             
             self.update_status("Tableau de bord actualisé")
-        
-        except Exception as e:
-            messagebox.showerror("Erreur", f"Erreur lors de l'actualisation du tableau de bord:\n{str(e)}")
-            self.update_status("Erreur")
     
     def create_kpi_card(self, parent, title, value, color, row, col):
         """Create a KPI card widget"""
