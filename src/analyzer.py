@@ -717,13 +717,14 @@ class Analyzer:
         recurring = [t for t in transactions if t.recurrence and t.recurrence != "non-récurrent"]
         
         # Group by description
-        forecast_dict = defaultdict(lambda: {'amount': 0.0, 'category': '', 'type': ''})
+        forecast_dict = defaultdict(lambda: {'amount': 0.0, 'category': '', 'type': '', 'vital': False})
         for trans in recurring:
             key = trans.description
             if key not in forecast_dict:
                 forecast_dict[key]['amount'] = abs(trans.amount)
                 forecast_dict[key]['category'] = trans.category
                 forecast_dict[key]['type'] = trans.recurrence
+                forecast_dict[key]['vital'] = trans.vital
         
         # Convert to list
         forecast = []
@@ -733,6 +734,7 @@ class Analyzer:
                 'amount': round(data['amount'], 2),
                 'category': data['category'],
                 'type': data['type'],
+                'vital': data['vital'],
                 'modified': round(data['amount'], 2)
             })
         

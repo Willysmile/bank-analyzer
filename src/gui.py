@@ -670,11 +670,11 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title = ttk.Label(frame, text="🔮 Prévisionnel du Mois Suivant", style='Title.TLabel')
+        title = ttk.Label(frame, text="🔮 Analyse des Récurrences", style='Title.TLabel')
         title.pack(pady=15)
         
         # Info label
-        info_text = "Récurrences du mois précédent - Modifiez les montants pour anticiper le mois suivant"
+        info_text = "Analyser les transactions récurrentes sur une période donnée - Modifiez les montants pour des prévisions"
         ttk.Label(frame, text=info_text, font=("Arial", 9, "italic")).pack()
         
         # Date filter frame
@@ -714,6 +714,20 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
                              font=("Arial", 10, "bold"), padx=15, pady=8, cursor="hand2")
         reset_btn.pack(side=tk.LEFT, padx=5)
         
+        # Report button
+        report_btn = tk.Button(button_frame, text="📄 Générer Rapport",
+                              command=self.generate_forecast_report,
+                              bg=self.COLORS['success'], fg=self.COLORS['light'],
+                              font=("Arial", 10, "bold"), padx=15, pady=8, cursor="hand2")
+        report_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Report frame (for text display)
+        report_frame = ttk.LabelFrame(frame, text="📋 Rapport Détaillé", padding=10)
+        report_frame.pack(fill=tk.BOTH, expand=False, pady=10, padx=0)
+        
+        self.forecast_report_text = tk.Text(report_frame, height=8, width=100, wrap=tk.WORD, font=("Courier", 9))
+        self.forecast_report_text.pack(fill=tk.BOTH, expand=True)
+        
         # Summary frame
         summary_frame = ttk.LabelFrame(frame, text="📊 Résumé", padding=10)
         summary_frame.pack(fill=tk.X, pady=10)
@@ -726,14 +740,15 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         table_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Treeview with editable cells
-        columns = ("Description", "Catégorie", "Récurrence", "Montant Original", "Prévision Mois Suivant")
+        columns = ("Description", "Catégorie", "Récurrence", "Vital", "Montant Original", "Prévision")
         self.forecast_tree = ttk.Treeview(table_frame, columns=columns, height=15, show="headings")
         
-        self.forecast_tree.column("Description", anchor=tk.W, width=200)
-        self.forecast_tree.column("Catégorie", anchor=tk.CENTER, width=120)
-        self.forecast_tree.column("Récurrence", anchor=tk.CENTER, width=100)
-        self.forecast_tree.column("Montant Original", anchor=tk.E, width=120)
-        self.forecast_tree.column("Prévision Mois Suivant", anchor=tk.E, width=150)
+        self.forecast_tree.column("Description", anchor=tk.W, width=180)
+        self.forecast_tree.column("Catégorie", anchor=tk.CENTER, width=100)
+        self.forecast_tree.column("Récurrence", anchor=tk.CENTER, width=90)
+        self.forecast_tree.column("Vital", anchor=tk.CENTER, width=50)
+        self.forecast_tree.column("Montant Original", anchor=tk.E, width=110)
+        self.forecast_tree.column("Prévision", anchor=tk.E, width=110)
         
         for col in columns:
             self.forecast_tree.heading(col, text=col)
@@ -775,10 +790,19 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             
             total_original = 0.0
             total_modified = 0.0
+            vital_count = 0
+            vital_amount = 0.0
             
             for i, item in enumerate(forecast_data):
                 total_original += item['amount']
                 total_modified += item['modified']
+                
+                # Count vital transactions
+                if item.get('vital'):
+                    vital_count += 1
+                    vital_amount += item['amount']
+                
+                vital_indicator = "⭐" if item.get('vital') else ""
                 
                 self.forecast_tree.insert(
                     "",
@@ -788,6 +812,7 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
                         item['description'][:50],
                         item['category'],
                         item['type'],
+                        vital_indicator,
                         f"€{item['amount']:.2f}",
                         f"€{item['modified']:.2f}"
                     )
@@ -796,13 +821,90 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             # Update summary
             difference = total_modified - total_original
             diff_text = f"+€{difference:.2f}" if difference > 0 else f"€{difference:.2f}"
-            summary = f"Total Original: €{total_original:.2f} | Total Prévisionnel: €{total_modified:.2f} | Différence: {diff_text}"
+            summary = f"Total Original: €{total_original:.2f} | Total Prévisionnel: €{total_modified:.2f} | Différence: {diff_text}\n"
+            summary += f"Transactions Vitales: {vital_count} | Montant Vital: €{vital_amount:.2f}"
             self.forecast_summary_label.config(text=summary)
+            
+            # Generate report
+            self.generate_forecast_report()
             
             self.update_status("Prévisions actualisées")
         
         except Exception as e:
             messagebox.showerror("Erreur", f"Erreur lors du chargement des prévisions:\n{str(e)}")
+    
+    def generate_forecast_report(self):
+        """Generate detailed forecast report"""
+        try:
+            # Clear report
+            self.forecast_report_text.config(state=tk.NORMAL)
+            self.forecast_report_text.delete("1.0", tk.END)
+            
+            if not self.forecast_data:
+                return
+            
+            # Header
+            start_date = self.forecast_start_date.get_date().strftime("%d/%m/%Y")
+            end_date = self.forecast_end_date.get_date().strftime("%d/%m/%Y")
+            report = f"{'='*120}\n"
+            report += f"📋 RAPPORT DÉTAILLÉ DES RÉCURRENCES\n"
+            report += f"Période: {start_date} → {end_date}\n"
+            report += f"{'='*120}\n\n"
+            
+            # Aggregate data
+            by_category = {}
+            vital_total = 0.0
+            non_vital_total = 0.0
+            vital_count = 0
+            non_vital_count = 0
+            
+            for item in self.forecast_data.values():
+                cat = item['category']
+                if cat not in by_category:
+                    by_category[cat] = {'vital': 0.0, 'non_vital': 0.0, 'items': []}
+                
+                if item.get('vital'):
+                    by_category[cat]['vital'] += item['amount']
+                    vital_total += item['amount']
+                    vital_count += 1
+                else:
+                    by_category[cat]['non_vital'] += item['amount']
+                    non_vital_total += item['amount']
+                    non_vital_count += 1
+                
+                by_category[cat]['items'].append(item)
+            
+            # Summary section
+            report += f"📊 RÉSUMÉ GLOBAL\n"
+            report += f"{'-'*120}\n"
+            report += f"  Total Transactions Vitales:      {vital_count:3d}  |  €{vital_total:10.2f}\n"
+            report += f"  Total Transactions Normales:     {non_vital_count:3d}  |  €{non_vital_total:10.2f}\n"
+            report += f"  TOTAL GÉNÉRAL:                  {vital_count + non_vital_count:3d}  |  €{vital_total + non_vital_total:10.2f}\n"
+            report += f"\n"
+            
+            # By category section
+            report += f"📂 DÉTAIL PAR CATÉGORIE\n"
+            report += f"{'-'*120}\n"
+            
+            for category in sorted(by_category.keys()):
+                data = by_category[category]
+                total_cat = data['vital'] + data['non_vital']
+                vital_pct = (data['vital'] / total_cat * 100) if total_cat > 0 else 0
+                
+                report += f"\n  {category.upper()}\n"
+                report += f"  {'─'*50}\n"
+                report += f"    ⭐ Vitales:     €{data['vital']:10.2f}  ({vital_pct:5.1f}%)\n"
+                report += f"    ◌ Normales:    €{data['non_vital']:10.2f}  ({100-vital_pct:5.1f}%)\n"
+                report += f"    Total:         €{total_cat:10.2f}\n"
+            
+            report += f"\n{'='*120}\n"
+            
+            # Display report
+            self.forecast_report_text.insert("1.0", report)
+            self.forecast_report_text.config(state=tk.DISABLED)
+        
+        except Exception as e:
+            pass  # Silently fail if report generation fails
     
     def edit_forecast_cell(self, event):
         """Edit forecast cell on double-click"""
