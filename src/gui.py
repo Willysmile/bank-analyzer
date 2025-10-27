@@ -281,46 +281,36 @@ class BankAnalyzerGUI:
         for widget in self.dashboard_frame.winfo_children():
             widget.destroy()
         
-        # 1. KPI Cards Section - use pack for full width in canvas
+        # 1. KPI Cards Section
         kpi_wrapper = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
-        kpi_wrapper.pack(fill=tk.X, padx=10, pady=10)
+        kpi_wrapper.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Grid of KPI cards - responsive layout (3 columns)
-        cards_grid = tk.Frame(kpi_wrapper)
-        cards_grid.pack(fill=tk.X)
+        # Create grid container for cards
+        cards_container = tk.Frame(kpi_wrapper)
+        cards_container.pack(fill=tk.BOTH, expand=True)
         
-        # Configure 3 columns to expand equally
-        cards_grid.columnconfigure(0, weight=1)
-        cards_grid.columnconfigure(1, weight=1)
-        cards_grid.columnconfigure(2, weight=1)
+        # Configure 3 equal columns - force minimum width so they expand evenly
+        for i in range(3):
+            cards_container.columnconfigure(i, weight=1, minsize=140)
         
-        # Card 1: Monthly Income
-        self.create_kpi_card(cards_grid, "💰 Revenus", f"€{summary['monthly_income']:.2f}", 
-                            "#27AE60", 0, 0)
+        # Configure 2 equal rows
+        for i in range(2):
+            cards_container.rowconfigure(i, weight=1)
         
-        # Card 2: Monthly Expenses
-        self.create_kpi_card(cards_grid, "💸 Dépenses", f"€{summary['monthly_expenses']:.2f}",
-                            "#E74C3C", 0, 1)
+        # Create cards using grid
+        card_data = [
+            ("� Revenus", f"€{summary['monthly_income']:.2f}", "#27AE60", 0, 0),
+            ("💸 Dépenses", f"€{summary['monthly_expenses']:.2f}", "#E74C3C", 0, 1),
+            ("📊 Bilan Net", f"€{summary['monthly_net']:.2f}", 
+             "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C", 0, 2),
+            ("🎯 Statut", f"{'✅ Bon' if summary['status'] == 'healthy' else ('⚠️ Attention' if summary['status'] == 'warning' else '❌ Déficit')}", 
+             "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C"), 1, 0),
+            ("🔄 Récurrent/mois", f"€{summary['recurring_monthly']:.2f}", "#3498DB", 1, 1),
+            ("📝 Transactions", f"{summary['transaction_count']}", "#9B59B6", 1, 2),
+        ]
         
-        # Card 3: Monthly Net
-        net_color = "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C"
-        self.create_kpi_card(cards_grid, "📊 Bilan Net", f"€{summary['monthly_net']:.2f}",
-                            net_color, 0, 2)
-        
-        # Card 4: Status
-        status_emoji = "✅" if summary['status'] == 'healthy' else ("⚠️" if summary['status'] == 'warning' else "❌")
-        status_text = "Bon" if summary['status'] == 'healthy' else ("Attention" if summary['status'] == 'warning' else "Déficit")
-        status_color = "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C")
-        self.create_kpi_card(cards_grid, "🎯 Statut", f"{status_emoji} {status_text}",
-                            status_color, 1, 0)
-        
-        # Card 5: Recurring
-        self.create_kpi_card(cards_grid, "🔄 Récurrent/mois", f"€{summary['recurring_monthly']:.2f}",
-                            "#3498DB", 1, 1)
-        
-        # Card 6: Transactions
-        self.create_kpi_card(cards_grid, "📝 Transactions", f"{summary['transaction_count']}",
-                            "#9B59B6", 1, 2)
+        for title, value, color, row, col in card_data:
+            self.create_kpi_card(cards_container, title, value, color, row, col)
         
         # 2. Monthly Trend Chart
         if trend_chart:
@@ -364,11 +354,10 @@ class BankAnalyzerGUI:
     
     def create_kpi_card(self, parent, title, value, color, row, col):
         """Create a KPI card widget"""
-        card = tk.Frame(parent, bg=color, height=120)
-        card.grid(row=row, column=col, padx=10, pady=10, sticky=tk.NSEW)
-        card.grid_propagate(False)  # Don't shrink the card
-        # Allow the card to expand naturally
-        ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0), fill=tk.X, expand=True)
+        card = tk.Frame(parent, bg=color, height=100)
+        card.grid(row=row, column=col, padx=8, pady=8, sticky=tk.NSEW)
+        
+        ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0), fill=tk.X)
         ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10, fill=tk.BOTH, expand=True)
     
     def setup_analysis_tab(self):
