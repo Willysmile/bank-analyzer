@@ -6,6 +6,7 @@ from tkinter import ttk, filedialog, messagebox, simpledialog
 from pathlib import Path
 from datetime import datetime, timedelta
 from tkcalendar import DateEntry
+from threading import Thread
 from src.database import Database
 from src.importer import CSVImporter
 from src.categorizer import Categorizer
@@ -775,64 +776,80 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         self.refresh_forecast()
     
     def refresh_forecast(self):
-        """Refresh forecast display"""
-        # Clear tree
-        for item in self.forecast_tree.get_children():
-            self.forecast_tree.delete(item)
+        """Refresh forecast display (threaded for responsiveness)"""
+        # Show loading state
+        self.forecast_summary_label.config(text="⏳ Chargement...")
         
+        # Run fetch in background thread
+        thread = Thread(target=self._fetch_forecast_data, daemon=True)
+        thread.start()
+    
+    def _fetch_forecast_data(self):
+        """Fetch forecast data in background thread"""
         try:
             # Get date range from widgets
             start_date = self.forecast_start_date.get_date().strftime("%Y-%m-%d")
             end_date = self.forecast_end_date.get_date().strftime("%Y-%m-%d")
             
+            # Fetch data (blocking, but in background thread)
             forecast_data = self.analyzer.get_forecast_data(start_date, end_date)
-            self.forecast_data = {i: item for i, item in enumerate(forecast_data)}
             
-            total_original = 0.0
-            total_modified = 0.0
-            vital_count = 0
-            vital_amount = 0.0
-            
-            for i, item in enumerate(forecast_data):
-                total_original += item['amount']
-                total_modified += item['modified']
-                
-                # Count vital transactions
-                if item.get('vital'):
-                    vital_count += 1
-                    vital_amount += item['amount']
-                
-                vital_indicator = "⭐" if item.get('vital') else ""
-                
-                self.forecast_tree.insert(
-                    "",
-                    "end",
-                    iid=str(i),
-                    values=(
-                        item['description'][:50],
-                        item['category'],
-                        item['type'],
-                        vital_indicator,
-                        f"€{item['amount']:.2f}",
-                        f"€{item['modified']:.2f}"
-                    )
-                )
-            
-            # Update summary
-            difference = total_modified - total_original
-            diff_text = f"+€{difference:.2f}" if difference > 0 else f"€{difference:.2f}"
-            summary = f"Total Original: €{total_original:.2f} | Total Prévisionnel: €{total_modified:.2f} | Différence: {diff_text}\n"
-            summary += f"Transactions Vitales: {vital_count} | Montant Vital: €{vital_amount:.2f}"
-            self.forecast_summary_label.config(text=summary)
-            
-            # Generate report (skip if initial load with no data)
-            if self.forecast_data:
-                self.generate_forecast_report()
-            
-            self.update_status("Prévisions actualisées")
+            # Update UI in main thread
+            self.root.after(0, self._update_forecast_ui, forecast_data)
         
         except Exception as e:
-            messagebox.showerror("Erreur", f"Erreur lors du chargement des prévisions:\n{str(e)}")
+            self.root.after(0, lambda: messagebox.showerror("Erreur", f"Erreur lors du chargement:\n{str(e)}"))
+    
+    def _update_forecast_ui(self, forecast_data):
+        """Update UI with forecast data (runs in main thread)"""
+        # Clear tree
+        for item in self.forecast_tree.get_children():
+            self.forecast_tree.delete(item)
+        
+        self.forecast_data = {i: item for i, item in enumerate(forecast_data)}
+        
+        total_original = 0.0
+        total_modified = 0.0
+        vital_count = 0
+        vital_amount = 0.0
+        
+        for i, item in enumerate(forecast_data):
+            total_original += item['amount']
+            total_modified += item['modified']
+            
+            # Count vital transactions
+            if item.get('vital'):
+                vital_count += 1
+                vital_amount += item['amount']
+            
+            vital_indicator = "⭐" if item.get('vital') else ""
+            
+            self.forecast_tree.insert(
+                "",
+                "end",
+                iid=str(i),
+                values=(
+                    item['description'][:50],
+                    item['category'],
+                    item['type'],
+                    vital_indicator,
+                    f"€{item['amount']:.2f}",
+                    f"€{item['modified']:.2f}"
+                )
+            )
+        
+        # Update summary
+        difference = total_modified - total_original
+        diff_text = f"+€{difference:.2f}" if difference > 0 else f"€{difference:.2f}"
+        summary = f"Total Original: €{total_original:.2f} | Total Prévisionnel: €{total_modified:.2f} | Différence: {diff_text}\n"
+        summary += f"Transactions Vitales: {vital_count} | Montant Vital: €{vital_amount:.2f}"
+        self.forecast_summary_label.config(text=summary)
+        
+        # Generate report (skip if initial load with no data)
+        if self.forecast_data:
+            self.generate_forecast_report()
+        
+        self.update_status("Prévisions actualisées")
     
     def generate_forecast_report(self):
         """Generate detailed forecast report"""
