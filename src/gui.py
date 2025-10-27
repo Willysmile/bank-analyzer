@@ -105,9 +105,11 @@ class BankAnalyzerGUI:
         self.refresh_rules_display()
         
         # Start a timer to process pending data updates from background threads
-        # and schedule initial refresh once mainloop is active.
-        self.root.after(500, self._schedule_initial_refreshes)
+        # This must be started FIRST before any refreshes spawn threads
         self.root.after(100, self._check_pending_data_updates)
+        
+        # Schedule initial refresh once mainloop is active (with a small delay to ensure timer is running)
+        self.root.after(200, self._schedule_initial_refreshes)
 
     
     def _schedule_initial_refreshes(self):
@@ -224,8 +226,9 @@ class BankAnalyzerGUI:
                                padx=20, pady=8, cursor="hand2")
         refresh_btn.pack(pady=10, after=title)
         
-        # Initial refresh
-        self.refresh_dashboard()
+        # Show loading message initially
+        loading_label = ttk.Label(self.dashboard_frame, text="⏳ Chargement du tableau de bord...", font=("Arial", 14, "bold"))
+        loading_label.pack(expand=True, fill=tk.BOTH)
     
     def refresh_dashboard(self):
         """Refresh dashboard with latest data (threaded for responsiveness)"""
@@ -279,15 +282,20 @@ class BankAnalyzerGUI:
             widget.destroy()
         
         # 1. KPI Cards Section
-        kpi_frame = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
-        kpi_frame.pack(fill=tk.X, padx=10, pady=10)
+        kpi_wrapper = ttk.LabelFrame(self.dashboard_frame, text="📈 Indicateurs Clés (Mois Actuel)", padding=15)
+        kpi_wrapper.pack(fill=tk.X, expand=False, padx=10, pady=10)
         
-        # Grid of KPI cards
-        cards_grid = ttk.Frame(kpi_frame)
-        cards_grid.pack(fill=tk.X)
-        # Make 3 columns expand equally for responsiveness
+        # Grid of KPI cards - responsive layout (3 columns)
+        cards_grid = tk.Frame(kpi_wrapper)
+        cards_grid.pack(fill=tk.BOTH, expand=True)
+        
+        # Configure 3 columns to expand equally
         for i in range(3):
             cards_grid.columnconfigure(i, weight=1)
+        
+        # Configure 2 rows to expand equally
+        for i in range(2):
+            cards_grid.rowconfigure(i, weight=1)
         
         # Card 1: Monthly Income
         self.create_kpi_card(cards_grid, "💰 Revenus", f"€{summary['monthly_income']:.2f}", 
@@ -360,8 +368,9 @@ class BankAnalyzerGUI:
     
     def create_kpi_card(self, parent, title, value, color, row, col):
         """Create a KPI card widget"""
-        card = tk.Frame(parent, bg=color)
+        card = tk.Frame(parent, bg=color, height=120)
         card.grid(row=row, column=col, padx=10, pady=10, sticky=tk.NSEW)
+        card.grid_propagate(False)  # Don't shrink the card
         # Allow the card to expand naturally
         ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0), fill=tk.X, expand=True)
         ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10, fill=tk.BOTH, expand=True)
