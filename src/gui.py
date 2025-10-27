@@ -291,25 +291,26 @@ class BankAnalyzerGUI:
         cards_container = tk.Frame(kpi_wrapper)
         cards_container.pack(fill=tk.BOTH, expand=True)
         
-        # Configure 3 equal columns - force minimum width so they expand evenly
-        for i in range(3):
-            cards_container.columnconfigure(i, weight=1, minsize=140)
-        
-        # Configure 2 equal rows
+        # Configure 2 equal columns
         for i in range(2):
+            cards_container.columnconfigure(i, weight=1)
+        
+        # Configure 3 equal rows
+        for i in range(3):
             cards_container.rowconfigure(i, weight=1)
         
-        # Create cards using grid
+        # Create cards using grid - 2 columns x 3 rows
         card_data = [
-            ("� Revenus", f"€{summary['monthly_income']:.2f}", "#27AE60", 0, 0),
-            ("💸 Dépenses", f"€{summary['monthly_expenses']:.2f}", "#E74C3C", 0, 1),
-            ("📊 Bilan Net", f"€{summary['monthly_net']:.2f}", 
-             "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C", 0, 2),
-            ("🎯 Statut", f"{'✅ Bon' if summary['status'] == 'healthy' else ('⚠️ Attention' if summary['status'] == 'warning' else '❌ Déficit')}", 
-             "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C"), 1, 0),
-            ("🔄 Récurrent/mois", f"€{summary['recurring_monthly']:.2f}", "#3498DB", 1, 1),
-            ("📝 Transactions", f"{summary['transaction_count']}", "#9B59B6", 1, 2),
+            ("Revenus", f"€{summary['monthly_income']:.2f}", "#27AE60", 0, 0),
+            ("Dépenses", f"€{summary['monthly_expenses']:.2f}", "#E74C3C", 0, 1),
+            ("Bilan Net", f"€{summary['monthly_net']:.2f}", 
+             "#27AE60" if summary['monthly_net'] >= 0 else "#E74C3C", 1, 0),
+            ("Statut", f"{'Bon' if summary['status'] == 'healthy' else ('Attention' if summary['status'] == 'warning' else 'Déficit')}", 
+             "#27AE60" if summary['status'] == 'healthy' else ("#F39C12" if summary['status'] == 'warning' else "#E74C3C"), 1, 1),
+            ("Récurrent", f"€{summary['recurring_monthly']:.2f}", "#3498DB", 2, 0),
+            ("Transactions", f"{summary['transaction_count']}", "#9B59B6", 2, 1),
         ]
+
         
         for title, value, color, row, col in card_data:
             self.create_kpi_card(cards_container, title, value, color, row, col)
