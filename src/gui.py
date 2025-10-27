@@ -825,8 +825,9 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             summary += f"Transactions Vitales: {vital_count} | Montant Vital: €{vital_amount:.2f}"
             self.forecast_summary_label.config(text=summary)
             
-            # Generate report
-            self.generate_forecast_report()
+            # Generate report (skip if initial load with no data)
+            if self.forecast_data:
+                self.generate_forecast_report()
             
             self.update_status("Prévisions actualisées")
         
@@ -904,7 +905,12 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             self.forecast_report_text.config(state=tk.DISABLED)
         
         except Exception as e:
-            pass  # Silently fail if report generation fails
+            import traceback
+            import sys
+            sys.stderr.write(f"❌ Report generation error: {e}\n")
+            traceback.print_exc(file=sys.stderr)
+            # Still don't crash, just log it
+            self.forecast_report_text.config(state=tk.DISABLED)
     
     def edit_forecast_cell(self, event):
         """Edit forecast cell on double-click"""
