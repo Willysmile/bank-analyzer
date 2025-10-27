@@ -99,10 +99,10 @@ class CSVImporter:
         # Common transaction types
         transaction_types = [
             "PAIEMENT PAR CARTE",
-            "PRELEVEMENT",
-            "VIREMENT",
             "VIREMENT EN VOTRE FAVEUR",
             "VIREMENT EMIS",
+            "VIREMENT",
+            "PRELEVEMENT",
             "RETRAIT AU DISTRIBUTEUR",
             "REMBOURSEMENT DE PRET",
             "COTISATION",

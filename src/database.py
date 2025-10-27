@@ -178,6 +178,31 @@ class Database:
             ))
         return results
     
+    def get_transaction_by_id(self, transaction_id: int) -> Optional[Transaction]:
+        """Get a single transaction by its ID"""
+        self.cursor.execute("""
+            SELECT id, date, description, amount, category, type, name, recurrence, vital, savings, created_at
+            FROM transactions
+            WHERE id = ?
+        """, (transaction_id,))
+        
+        row = self.cursor.fetchone()
+        if row:
+            return Transaction(
+                id=row[0],
+                date=row[1],
+                description=row[2],
+                amount=row[3],
+                category=row[4],
+                type=row[5],
+                name=row[6],
+                recurrence=bool(row[7]),
+                vital=bool(row[8]),
+                savings=bool(row[9]),
+                created_at=row[10]
+            )
+        return None
+    
     def update_transaction_category(self, transaction_id: int, category: str) -> bool:
         """Update transaction category"""
         self.cursor.execute("""
@@ -230,7 +255,11 @@ class Database:
         return result[0] if result else None
     
     def remove_duplicates(self) -> int:
-        """Remove duplicate transactions, keeping the first occurrence"""
+        """Remove duplicate transactions, keeping the first occurrence
+        
+        Returns:
+            Number of duplicate transactions removed
+        """
         self.cursor.execute("""
             DELETE FROM transactions
             WHERE id NOT IN (

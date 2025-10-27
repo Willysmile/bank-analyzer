@@ -148,6 +148,7 @@ class Categorizer:
         "Loisirs": ["cinema", "theatre", "spotify", "netflix", "jeux", "flickr", "steam", "playstation"],
         "Santé": ["pharmacie", "docteur", "medical", "sante", "dentiste"],
         "Éducation": ["ecole", "universite", "formation", "cours"],
+        "Salaire": ["salaire", "virement salaire", "paye", "traitement"],
     }
     
     DEFAULT_CATEGORIES = list(DEFAULT_CATEGORIES_EXPENSES.keys()) + list(DEFAULT_CATEGORIES_INCOME.keys())
@@ -351,7 +352,15 @@ class Categorizer:
     
     def get_categories(self) -> List[str]:
         """Get all available categories"""
-        return self.DEFAULT_CATEGORIES
+        if not self.db:
+            return self.DEFAULT_CATEGORIES
+        
+        try:
+            self.db.cursor.execute("SELECT name FROM categories WHERE parent_id IS NULL ORDER BY name")
+            results = self.db.cursor.fetchall()
+            return [row[0] for row in results] if results else self.DEFAULT_CATEGORIES
+        except:
+            return self.DEFAULT_CATEGORIES
     
     def add_category(self, category_name: str, description: str = "") -> bool:
         """Add a new category"""
@@ -375,8 +384,9 @@ class Categorizer:
         
         try:
             self.db.cursor.execute("DELETE FROM categories WHERE name = ?", (category_name,))
+            deleted = self.db.cursor.rowcount > 0
             self.db.connection.commit()
-            return True
+            return deleted
         except:
             return False
     
@@ -386,13 +396,20 @@ class Categorizer:
             return False
         
         try:
-            # Get category id
+            # Get category id, create category if it doesn't exist
             self.db.cursor.execute("SELECT id FROM categories WHERE name = ?", (category,))
             result = self.db.cursor.fetchone()
-            if not result:
-                return False
             
-            category_id = result[0]
+            if not result:
+                # Create the category first
+                self.db.cursor.execute(
+                    "INSERT INTO categories (name) VALUES (?)",
+                    (category,)
+                )
+                category_id = self.db.cursor.lastrowid
+            else:
+                category_id = result[0]
+            
             self.db.cursor.execute(
                 "INSERT INTO categorization_rules (keyword, category_id) VALUES (?, ?)",
                 (keyword.lower(), category_id)
@@ -440,8 +457,10 @@ class Categorizer:
             return []
         
         self.db.cursor.execute("""
-            SELECT id, name, parent_id FROM categories
-            ORDER BY parent_id, name
+            SELECT c.id, c.name, c.parent_id, p.name as parent_name
+            FROM categories c
+            LEFT JOIN categories p ON c.parent_id = p.id
+            ORDER BY c.parent_id, c.name
         """)
         
         categories = []
@@ -449,7 +468,8 @@ class Categorizer:
             categories.append({
                 'id': row[0],
                 'name': row[1],
-                'parent_id': row[2]
+                'parent_id': row[2],
+                'parent': row[3] if row[3] else None
             })
         return categories
     
@@ -510,7 +530,7 @@ class Categorizer:
     def get_parent_category(self, subcategory_name: str) -> str:
         """Get the parent category of a subcategory"""
         if not self.db:
-            return None
+            return ""
         
         try:
             self.db.cursor.execute("""
@@ -520,9 +540,9 @@ class Categorizer:
             """, (subcategory_name,))
             
             result = self.db.cursor.fetchone()
-            return result[0] if result else None
+            return result[0] if result else ""
         except:
-            return None
+            return ""
     
     def remove_duplicate_transactions(self) -> int:
         """Remove duplicate transactions from the database"""
