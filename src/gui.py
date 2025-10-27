@@ -52,6 +52,7 @@ class BankAnalyzerGUI:
         # Workers write to these, main thread reads and updates UI
         self.pending_dashboard_data = None
         self.pending_forecast_data = None
+        self.pending_analysis_data = None
         
         # Create header
         self.create_header()
@@ -127,6 +128,12 @@ class BankAnalyzerGUI:
             summary, monthly, savings, trend_chart = self.pending_dashboard_data
             self._update_dashboard_ui(summary, monthly, savings, trend_chart)
             self.pending_dashboard_data = None
+        
+        # Check analysis data
+        if self.pending_analysis_data is not None:
+            monthly, savings = self.pending_analysis_data
+            self._update_analysis_ui(monthly, savings)
+            self.pending_analysis_data = None
         
         # Check forecast data
         if self.pending_forecast_data is not None:
@@ -415,15 +422,38 @@ class BankAnalyzerGUI:
         self.refresh_analysis()
     
     def refresh_analysis(self):
-        """Refresh analysis tab with detailed reports"""
+        """Refresh analysis tab with detailed reports (threaded for thread-safety)"""
+        # Spawn background thread to fetch data
+        thread = Thread(target=self._fetch_analysis_data, daemon=True)
+        thread.start()
+    
+    def _fetch_analysis_data(self):
+        """Fetch analysis data in background thread"""
+        try:
+            # Create thread-local Database/Analyzer to avoid sqlite thread errors
+            local_db = Database(str(self.db.db_path)) if hasattr(self.db, 'db_path') else Database()
+            local_analyzer = Analyzer(local_db)
+            
+            # Fetch data (blocking, but in background thread)
+            monthly = local_analyzer.get_monthly_statistics()
+            savings = local_analyzer.get_savings_analysis()
+            
+            # Store data for main thread to process (thread-safe: just assigning)
+            self.pending_analysis_data = (monthly, savings)
+        
+        except Exception as e:
+            # Log error to stderr, don't crash the worker
+            import sys, traceback
+            sys.stderr.write(f"❌ Analysis fetch error: {str(e)}\n")
+            traceback.print_exc()
+    
+    def _update_analysis_ui(self, monthly, savings):
+        """Update analysis UI (runs in main thread)"""
         # Clear previous content
         for widget in self.analysis_frame.winfo_children():
             widget.destroy()
         
         try:
-            monthly = self.analyzer.get_monthly_statistics()
-            savings = self.analyzer.get_savings_analysis()
-            
             # 1. Monthly Comparison Table
             monthly_frame = ttk.LabelFrame(self.analysis_frame, text="📅 Historique Mensuel (12 derniers mois)", padding=15)
             monthly_frame.pack(fill=tk.X, padx=10, pady=10)
