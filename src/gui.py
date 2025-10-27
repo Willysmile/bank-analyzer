@@ -124,7 +124,6 @@ class BankAnalyzerGUI:
         """Create a header section"""
         header = tk.Frame(self.root, bg=self.COLORS['primary'], height=80)
         header.pack(fill=tk.X, side=tk.TOP)
-        header.pack_propagate(False)
         
         # Logo and title
         logo_label = tk.Label(header, text="🏦", font=("Arial", 40), 
@@ -235,6 +234,9 @@ class BankAnalyzerGUI:
         # Grid of KPI cards
         cards_grid = ttk.Frame(kpi_frame)
         cards_grid.pack(fill=tk.X)
+        # Make 3 columns expand equally for responsiveness
+        for i in range(3):
+            cards_grid.columnconfigure(i, weight=1)
         
         # Card 1: Monthly Income
         self.create_kpi_card(cards_grid, "💰 Revenus", f"€{summary['monthly_income']:.2f}", 
@@ -307,12 +309,11 @@ class BankAnalyzerGUI:
     
     def create_kpi_card(self, parent, title, value, color, row, col):
         """Create a KPI card widget"""
-        card = tk.Frame(parent, bg=color, height=100, width=150)
+        card = tk.Frame(parent, bg=color)
         card.grid(row=row, column=col, padx=10, pady=10, sticky=tk.NSEW)
-        card.pack_propagate(False)
-        
-        ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0))
-        ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10)
+        # Allow the card to expand naturally
+        ttk.Label(card, text=title, font=("Arial", 9), background=color, foreground="white").pack(pady=(10, 0), fill=tk.X, expand=True)
+        ttk.Label(card, text=value, font=("Arial", 16, "bold"), background=color, foreground="white").pack(pady=10, fill=tk.BOTH, expand=True)
     
     def setup_analysis_tab(self):
         """Setup the analysis tab for detailed monthly and savings analysis"""
@@ -1009,7 +1010,6 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         """Create a status bar at the bottom"""
         status_bar = tk.Frame(self.root, bg=self.COLORS['primary'], height=25)
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
-        status_bar.pack_propagate(False)
         
         self.status_text = tk.Label(status_bar, text="Prêt", 
                                    font=("Arial", 9),
