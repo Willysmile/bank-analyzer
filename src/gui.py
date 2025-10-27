@@ -4,7 +4,7 @@ GUI module - Graphical User Interface with Tkinter
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from tkcalendar import DateEntry
 from src.database import Database
 from src.importer import CSVImporter
@@ -683,12 +683,19 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         
         ttk.Label(date_filter_frame, text="Du:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
         self.forecast_start_date = DateEntry(date_filter_frame, width=15, background='darkblue', 
-                                             foreground='white', borderwidth=2)
+                                             foreground='white', borderwidth=2,
+                                             year=(datetime.now().replace(day=1) - timedelta(days=1)).year,
+                                             month=(datetime.now().replace(day=1) - timedelta(days=1)).month,
+                                             day=1)
         self.forecast_start_date.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
         
         ttk.Label(date_filter_frame, text="Au:").grid(row=0, column=2, sticky=tk.W, padx=15, pady=5)
+        last_day = (datetime.now().replace(day=1) - timedelta(days=1))
         self.forecast_end_date = DateEntry(date_filter_frame, width=15, background='darkblue',
-                                           foreground='white', borderwidth=2)
+                                           foreground='white', borderwidth=2,
+                                           year=last_day.year,
+                                           month=last_day.month,
+                                           day=last_day.day)
         self.forecast_end_date.grid(row=0, column=3, sticky=tk.W, padx=5, pady=5)
         
         # Button frame
