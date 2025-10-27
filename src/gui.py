@@ -887,7 +887,7 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
             report += f"📂 DÉTAIL PAR CATÉGORIE\n"
             report += f"{'-'*120}\n"
             
-            for category in sorted(by_category.keys()):
+            for category in sorted(by_category.keys(), key=lambda x: str(x) if x is not None else ""):
                 data = by_category[category]
                 total_cat = data['vital'] + data['non_vital']
                 vital_pct = (data['vital'] / total_cat * 100) if total_cat > 0 else 0
