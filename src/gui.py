@@ -48,6 +48,11 @@ class BankAnalyzerGUI:
         # Initialize categories
         self.categorizer.init_categories()
         
+        # Background data storage for thread-safe updates
+        # Workers write to these, main thread reads and updates UI
+        self.pending_dashboard_data = None
+        self.pending_forecast_data = None
+        
         # Create header
         self.create_header()
         
@@ -93,12 +98,42 @@ class BankAnalyzerGUI:
         # Create status bar
         self.create_status_bar()
         
-        # Initial data load
+        # Initial data load (non-threaded, runs synchronously in main thread)
         self.update_stats_display()
         self.refresh_transactions()
         self.refresh_categories_tree()
         self.refresh_rules_display()
+        
+        # Start a timer to process pending data updates from background threads
+        # and schedule initial refresh once mainloop is active.
+        self.root.after(500, self._schedule_initial_refreshes)
+        self.root.after(100, self._check_pending_data_updates)
 
+    
+    def _schedule_initial_refreshes(self):
+        """Schedule initial dashboard and forecast refreshes once mainloop is active"""
+        self.refresh_dashboard()
+        self.refresh_forecast()
+    
+    def _check_pending_data_updates(self):
+        """
+        Check for pending data updates from background threads and apply them to UI.
+        This timer runs in the main thread (Tk mainloop), so it's safe to update UI.
+        """
+        # Check dashboard data
+        if self.pending_dashboard_data is not None:
+            summary, monthly, savings, trend_chart = self.pending_dashboard_data
+            self._update_dashboard_ui(summary, monthly, savings, trend_chart)
+            self.pending_dashboard_data = None
+        
+        # Check forecast data
+        if self.pending_forecast_data is not None:
+            forecast_data = self.pending_forecast_data
+            self._update_forecast_ui(forecast_data)
+            self.pending_forecast_data = None
+        
+        # Reschedule this timer (runs every 100ms to check for updates)
+        self.root.after(100, self._check_pending_data_updates)
     
     def setup_styles(self):
         """Configure ttk styles"""
@@ -208,20 +243,36 @@ class BankAnalyzerGUI:
     def _fetch_dashboard_data(self):
         """Fetch dashboard data in background thread"""
         try:
+            # Use a thread-local Database/Analyzer to avoid sqlite objects crossing threads
+            local_db = Database(str(self.db.db_path)) if hasattr(self.db, 'db_path') else Database()
+            local_analyzer = Analyzer(local_db)
+
             # Get dashboard data (blocking, but in background thread)
-            summary = self.analyzer.get_dashboard_summary()
-            monthly = self.analyzer.get_monthly_statistics()
-            savings = self.analyzer.get_savings_analysis()
-            trend_chart = self.analyzer.get_monthly_trend_chart()
-            savings_chart = self.analyzer.get_savings_chart()
-            
-            # Update UI in main thread
-            self.root.after(0, self._update_dashboard_ui, summary, monthly, savings, trend_chart, savings_chart)
-        
+            summary = local_analyzer.get_dashboard_summary()
+            monthly = local_analyzer.get_monthly_statistics()
+            savings = local_analyzer.get_savings_analysis()
+            trend_chart = local_analyzer.get_monthly_trend_chart()
+
+            # Some Analyzer implementations may not provide a savings chart helper.
+            # Call it only when available to avoid AttributeError in background threads.
+            savings_chart = None
+            if hasattr(local_analyzer, 'get_savings_chart') and callable(getattr(local_analyzer, 'get_savings_chart')):
+                try:
+                    savings_chart = local_analyzer.get_savings_chart()
+                except Exception:
+                    # If it fails, ignore chart generation but continue updating dashboard UI
+                    savings_chart = None
+
+            # Store data for main thread to process (thread-safe: just assigning a tuple)
+            self.pending_dashboard_data = (summary, monthly, savings, trend_chart)
+
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Erreur", f"Erreur tableau de bord:\n{str(e)}"))
+            # Log error to stderr so it can be seen if needed, but don't crash the worker
+            import sys, traceback
+            sys.stderr.write(f"❌ Dashboard fetch error: {str(e)}\n")
+            traceback.print_exc()
     
-    def _update_dashboard_ui(self, summary, monthly, savings, trend_chart, savings_chart):
+    def _update_dashboard_ui(self, summary, monthly, savings, trend_chart):
         """Update dashboard UI (runs in main thread)"""
         # Clear previous content
         for widget in self.dashboard_frame.winfo_children():
@@ -799,26 +850,37 @@ Alertes: {budget_status['alert_count']} objectif(s) dépassé(s) ou en attention
         """Refresh forecast display (threaded for responsiveness)"""
         # Show loading state
         self.forecast_summary_label.config(text="⏳ Chargement...")
-        
-        # Run fetch in background thread
-        thread = Thread(target=self._fetch_forecast_data, daemon=True)
-        thread.start()
-    
-    def _fetch_forecast_data(self):
-        """Fetch forecast data in background thread"""
+        # Read date range from widgets in main thread (Tk calls must not be in worker thread)
         try:
-            # Get date range from widgets
             start_date = self.forecast_start_date.get_date().strftime("%Y-%m-%d")
             end_date = self.forecast_end_date.get_date().strftime("%Y-%m-%d")
-            
+        except Exception:
+            # Fallback to None to let analyzer use defaults
+            start_date = None
+            end_date = None
+
+        # Run fetch in background thread, pass dates as args
+        thread = Thread(target=self._fetch_forecast_data, args=(start_date, end_date), daemon=True)
+        thread.start()
+    
+    def _fetch_forecast_data(self, start_date=None, end_date=None):
+        """Fetch forecast data in background thread"""
+        try:
+            # Create a thread-local Database/Analyzer to avoid sqlite thread errors
+            local_db = Database(str(self.db.db_path)) if hasattr(self.db, 'db_path') else Database()
+            local_analyzer = Analyzer(local_db)
+
             # Fetch data (blocking, but in background thread)
-            forecast_data = self.analyzer.get_forecast_data(start_date, end_date)
+            forecast_data = local_analyzer.get_forecast_data(start_date, end_date)
             
-            # Update UI in main thread
-            self.root.after(0, self._update_forecast_ui, forecast_data)
+            # Store data for main thread to process (thread-safe: just assigning)
+            self.pending_forecast_data = forecast_data
         
         except Exception as e:
-            self.root.after(0, lambda: messagebox.showerror("Erreur", f"Erreur lors du chargement:\n{str(e)}"))
+            # Log error to stderr, don't crash the worker
+            import sys, traceback
+            sys.stderr.write(f"❌ Forecast fetch error: {str(e)}\n")
+            traceback.print_exc()
     
     def _update_forecast_ui(self, forecast_data):
         """Update UI with forecast data (runs in main thread)"""
